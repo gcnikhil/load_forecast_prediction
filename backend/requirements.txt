@@ -1,0 +1,24 @@
+# FastAPI Backend
+fastapi
+uvicorn
+
+# Data Processing
+pandas
+numpy
+
+# Machine Learning
+scikit-learn
+lightgbm
+tensorflow
+joblib
+
+# Data Visualization
+matplotlib
+
+# Web Scraping (for continuous data pipeline)
+requests
+beautifulsoup4
+schedule
+
+# Pydantic for data validation
+pydantic
