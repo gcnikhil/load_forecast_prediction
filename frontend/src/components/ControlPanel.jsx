@@ -11,10 +11,26 @@ const ControlPanel = ({ onPredict, loading }) => {
     
     const [startDate, setStartDate] = useState(formatDate(today));
     const [endDate, setEndDate] = useState(formatDate(tomorrow));
+    const oneWeekAhead = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onPredict(startDate, endDate);
+        // Enforce constraints: start <= today, end between start and today+7
+        const s = new Date(startDate);
+        const eDate = new Date(endDate);
+        const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const maxEnd = new Date(oneWeekAhead.getFullYear(), oneWeekAhead.getMonth(), oneWeekAhead.getDate());
+
+        // Clamp start to today if future
+        if (s > todayOnly) {
+            setStartDate(formatDate(todayOnly));
+        }
+        // Ensure end >= start and end <= today+7
+        let nextEnd = eDate < s ? s : eDate;
+        if (nextEnd > maxEnd) nextEnd = maxEnd;
+        setEndDate(formatDate(nextEnd));
+
+        onPredict(formatDate(s > todayOnly ? todayOnly : s), formatDate(nextEnd));
     };
 
     return (
@@ -39,6 +55,7 @@ const ControlPanel = ({ onPredict, loading }) => {
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
                         className="w-full bg-[#131b2d] border border-[#00FFF6]/50 px-4 py-3 text-[#EAEAEA] font-mono focus:border-[#00FFF6] focus:shadow-[0_0_10px_rgba(0,255,246,0.2)] outline-none transition-all placeholder-[#8A8F98]"
+                        max={formatDate(today)}
                     />
                 </div>
 
@@ -51,6 +68,8 @@ const ControlPanel = ({ onPredict, loading }) => {
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         className="w-full bg-[#131b2d] border border-[#FF2A6D]/50 px-4 py-3 text-[#EAEAEA] font-mono focus:border-[#FF2A6D] focus:shadow-[0_0_10px_rgba(255,42,109,0.2)] outline-none transition-all"
+                        min={startDate}
+                        max={formatDate(oneWeekAhead)}
                     />
                 </div>
 

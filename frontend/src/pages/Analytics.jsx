@@ -212,7 +212,7 @@ const Analytics = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="bg-[#0B0F1A] border border-[#1e293b] p-4 rounded-lg">
                     <h3 className="text-sm font-bold text-slate-400 mb-2 flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-[#00FFF6]" /> HOURLY LOAD PATTERN
+                        <Clock className="w-4 h-4 text-[#00FFF6]" /> HOURLY OPTIMUM LOAD PATTERN
                     </h3>
                     <div style={{ width: '100%', height: 280 }}>
                         <ResponsiveContainer>
@@ -232,7 +232,7 @@ const Analytics = () => {
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${(v/1000).toFixed(1)}k`} domain={['dataMin - 200', 'dataMax + 200']} />
                                 <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #00FFF6', borderRadius: 4, fontSize: 11 }} />
                                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                                <Area type="monotone" dataKey="LSTM" stroke="#00FFF6" fill="url(#gL)" strokeWidth={2} />
+                                
                                 <Area type="monotone" dataKey="GRU" stroke="#FF2A6D" fill="url(#gG)" strokeWidth={2} />
                             </AreaChart>
                         </ResponsiveContainer>

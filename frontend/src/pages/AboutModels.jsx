@@ -24,7 +24,7 @@ const AboutModels = () => {
             features: [
                 'LightGBM: 1000 trees for calendar & lag features',
                 'LSTM: 2 layers x 64 units for residual patterns',
-                'RMSE: 9.54 MW | MAPE: 0.19%',
+                'RMSE: 25 MW | MAPE: 0.36%',
                 'Best for: Smooth, stable multi-day forecasts'
             ],
             icon: Network,
@@ -36,9 +36,9 @@ const AboutModels = () => {
             title: 'LightGBM + GRU Hybrid',
             description: 'A hybrid model using Gradient Boosting with Gated Recurrent Units (GRU). Faster response to recent changes with efficient memory usage.',
             features: [
-                'GRU: Faster training than LSTM (30% less time)',
+                'GRU: Faster training than LSTM ',
                 'Better at short-term fluctuations',
-                'RMSE: 9.97 MW | MAPE: 0.21%',
+                'RMSE: 55 MW | MAPE: 0.53%',
                 'Best for: Real-time responsive forecasting'
             ],
             icon: Cpu,
@@ -124,10 +124,10 @@ const AboutModels = () => {
                         <h4 className="uppercase text-sm tracking-wider">Model_Performance</h4>
                     </div>
                     <div className="space-y-2 text-sm">
-                        <p className="text-slate-400">LSTM RMSE: <span className="text-[#00FFF6]">9.54 MW</span></p>
-                        <p className="text-slate-400">GRU RMSE: <span className="text-[#FF2A6D]">9.97 MW</span></p>
-                        <p className="text-slate-400">LSTM MAPE: <span className="text-[#00FFF6]">0.19%</span></p>
-                        <p className="text-slate-400">GRU MAPE: <span className="text-[#FF2A6D]">0.21%</span></p>
+                        <p className="text-slate-400">LSTM RMSE: <span className="text-[#00FFF6]">25 MW</span></p>
+                        <p className="text-slate-400">GRU RMSE: <span className="text-[#FF2A6D]">55 MW</span></p>
+                        <p className="text-slate-400">LSTM MAPE: <span className="text-[#00FFF6]">0.36%</span></p>
+                        <p className="text-slate-400">GRU MAPE: <span className="text-[#FF2A6D]">0.53%</span></p>
                     </div>
                 </div>
             </div>

@@ -1,5 +1,11 @@
+import os
+# Suppress TensorFlow logging BEFORE any imports
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from model import ModelService
 from schemas import ForecastRequest, ForecastResponse
 from data_pipeline import DelhiSLDCScraper
@@ -23,11 +29,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# GZip compression to reduce payload size
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Global model service
 model_service = ModelService()
 
 # Global scraper for real-time data
 scraper = DelhiSLDCScraper("data")
+
+# Simple in-memory cache for predictions
+_prediction_cache = {}
+_PREDICTION_CACHE_TTL_SECONDS = 3600  # 1 hour
 
 @app.on_event("startup")
 async def startup_event():
@@ -50,8 +63,17 @@ async def predict_load(request: ForecastRequest):
         if (end_date - start_date).days > 7:
              raise HTTPException(status_code=400, detail="Maximum forecast range is 7 days")
             
-        # Base prediction for full range (acts as fallback/future)
-        forecast_df = model_service.predict(start_date, end_date)
+        # Cache key
+        cache_key = (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        now_ts = datetime.now().timestamp()
+        cached = _prediction_cache.get(cache_key)
+        if cached and (now_ts - cached[0]) < _PREDICTION_CACHE_TTL_SECONDS:
+            forecast_df = cached[1]
+        else:
+            # Base prediction for full range (acts as fallback/future)
+            forecast_df = model_service.predict(start_date, end_date)
+            # Store in cache
+            _prediction_cache[cache_key] = (now_ts, forecast_df)
 
         # If both dates are in the past, prefer actual 5-minute data; if the range spans past→future,
         # use actuals up to "now" and predictions after.
