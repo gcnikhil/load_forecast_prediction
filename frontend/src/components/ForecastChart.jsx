@@ -72,7 +72,7 @@ const ForecastChart = ({ data }) => {
     };
 
     return (
-        <div className="w-full h-full flex flex-col">
+        <div className="w-full h-full flex flex-col min-h-[360px]">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-slate-300">Load Forecast Comparison</h3>
                 <div className="flex gap-4 text-xs font-mono">
@@ -81,7 +81,7 @@ const ForecastChart = ({ data }) => {
                     <span className="text-slate-500">Avg: <span className="text-slate-300">{Math.round(avgLoad).toLocaleString()} MW</span></span>
                 </div>
             </div>
-            <ResponsiveContainer width="100%" height="90%">
+            <ResponsiveContainer width="100%" height="90%" minWidth={0} minHeight={320}>
                 <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                         <linearGradient id="colorLSTM" x1="0" y1="0" x2="0" y2="1">

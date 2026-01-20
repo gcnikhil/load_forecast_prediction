@@ -246,7 +246,7 @@ def train_hybrid_model(data_path: str, model_dir: str, epochs: int = 100):
     residuals_test_scaled = residual_scaler.transform(residuals_test.reshape(-1, 1))
     
     # Create sequences for RNN
-    nlags = 24  # 2 hours of history
+    nlags = 288  # Full 24-hour pattern (critical for daily seasonality)
     
     lstm_X_train, lstm_y_train = create_sequences(residuals_train_scaled, nlags)
     lstm_X_val, lstm_y_val = create_sequences(residuals_val_scaled, nlags)
@@ -259,8 +259,8 @@ def train_hybrid_model(data_path: str, model_dir: str, epochs: int = 100):
     print(f"\nRNN sequence shapes:")
     print(f"  Train: {lstm_X_train.shape}, Val: {lstm_X_val.shape}, Test: {lstm_X_test.shape}")
     
-    # Early stopping callback
-    es = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, verbose=1)
+    # Early stopping callback (allow more patience)
+    es = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True, verbose=1)
     
     # Train LSTM model
     print("\nTraining LSTM model on residuals...")
@@ -359,6 +359,32 @@ def train_hybrid_model(data_path: str, model_dir: str, epochs: int = 100):
     joblib.dump(metadata, os.path.join(model_dir, 'gru_metadata.joblib'))
     joblib.dump(metadata, os.path.join(model_dir, 'metadata.joblib'))
     print(f"  ✓ Metadata saved")
+    
+    # Verify models were saved correctly
+    print("\n" + "=" * 60)
+    print("VERIFYING SAVED MODELS")
+    print("=" * 60)
+    
+    try:
+        from tensorflow.keras.models import load_model
+        test_lstm = load_model(os.path.join(model_dir, 'lstm_model.keras'))
+        print("  ✓ LSTM model verified - loads correctly")
+        del test_lstm
+    except Exception as e:
+        print(f"  ✗ LSTM model verification FAILED: {e}")
+    
+    try:
+        test_gru = load_model(os.path.join(model_dir, 'gru_model.keras'))
+        print("  ✓ GRU model verified - loads correctly")
+        del test_gru
+    except Exception as e:
+        print(f"  ✗ GRU model verification FAILED: {e}")
+    
+    try:
+        test_metadata = joblib.load(os.path.join(model_dir, 'metadata.joblib'))
+        print(f"  ✓ Metadata verified - {len(test_metadata['feature_cols'])} features")
+    except Exception as e:
+        print(f"  ✗ Metadata verification FAILED: {e}")
     
     print("\n" + "=" * 60)
     print("TRAINING COMPLETE!")
