@@ -78,7 +78,7 @@ const Dashboard = () => {
         <div className="space-y-6">
             <header className="mb-6">
                 <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">Dashboard</h2>
-                <p className="text-slate-400 text-sm">Real-time energy load forecasting and grid analytics for Delhi SLDC.</p>
+                <p className="text-slate-400 text-sm">Real-time energy load forecasting and grid analytics for Bengaluru BESCOM.</p>
             </header>
 
             {/* Real-time Grid Status Bar */}

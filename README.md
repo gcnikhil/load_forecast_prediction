@@ -1,150 +1,79 @@
-# ⚡ Delhi Load Forecast Prediction System
+# Karnataka Load Forecast Prediction System
 
-A real-time energy load forecasting application for **Delhi State Load Despatch Centre (SLDC)** using hybrid **LightGBM + LSTM/GRU** deep learning models.
+A real-time energy load forecasting application using official Karnataka SLDC load data and real Bengaluru weather data.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)
-![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-FF6F00?logo=tensorflow)
+## Features
 
----
+- Hybrid ML models: LightGBM + LSTM and LightGBM + GRU
+- Real-time dashboard for grid status and forecast visualization
+- 5-minute interval forecasting up to 7 days ahead
+- Official Karnataka SLDC archived load-curve scraping
+- Real Bengaluru weather enrichment from Open-Meteo
+- Colab-friendly training script that defaults to the real dataset
 
-## 📋 Table of Contents
+## Architecture
 
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Model Performance](#-model-performance)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [API Endpoints](#-api-endpoints)
-- [Project Structure](#-project-structure)
-- [Team](#-team)
+- Frontend: React + Vite + TailwindCSS
+- Backend: FastAPI + Python
+- Models: LightGBM + TensorFlow/Keras
+- Data: Pandas + NumPy + scikit-learn
 
----
+## Installation
 
-## ✨ Features
-
-- **Hybrid ML Models**: LightGBM + LSTM and LightGBM + GRU ensemble for accurate predictions
-- **Real-time Dashboard**: Live grid status with frequency, load, schedule, and generation data
-- **Interactive Analytics**: Hourly patterns, model comparison, load distribution charts
-- **5-Minute Interval Forecasting**: High-resolution predictions up to 7 days ahead
-- **Delhi SLDC Integration**: Based on actual grid parameters and historical data
-
----
-
-## 🏗 Architecture
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   React + Vite  │────▶│  FastAPI Backend │────▶│  Hybrid Models  │
-│   (Frontend)    │◀────│    (Port 8002)   │◀────│  LSTM/GRU+LGB   │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-        │                        │
-        ▼                        ▼
-   Recharts UI            Delhi SLDC Data
-   TailwindCSS            (34,560 samples)
-```
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, Vite, TailwindCSS, Recharts, Lucide Icons |
-| Backend | FastAPI, Uvicorn, Python 3.10+ |
-| ML Models | LightGBM, TensorFlow/Keras (LSTM, GRU) |
-| Data | Pandas, NumPy, Scikit-learn |
-
----
-
-## 📊 Model Performance
-
-| Model | RMSE (MW) | MAPE (%) | Training Samples |
-|-------|-----------|----------|------------------|
-| **LightGBM + LSTM** | 9.54 | 0.19% | 34,560 |
-| **LightGBM + GRU** | 9.97 | 0.21% | 34,560 |
-
-- **Training Period**: October 2025 - January 2026
-- **Features**: 34 engineered features (temporal, lag, rolling statistics)
-- **Data Source**: Delhi SLDC (5-minute intervals)
-
----
-
-## 🚀 Installation
-
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- Git
-
-### Backend Setup
+### Backend
 
 ```bash
-# Navigate to backend
 cd backend
-
-# Create virtual environment (optional but recommended)
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Start the server
 python main.py
 ```
 
-Server runs at: `http://localhost:8002`
+Backend runs on [http://localhost:8002](http://localhost:8002).
 
-### Frontend Setup
+### Frontend
 
 ```bash
-# Navigate to frontend
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Frontend runs at: `http://localhost:5173`
+Frontend runs on [http://localhost:5173](http://localhost:5173).
 
----
+## Training In Google Colab
 
-## 💻 Usage
+Build the real dataset first, then train from the `backend` folder:
 
-1. **Start Backend**: Run `python main.py` in the `backend` folder
-2. **Start Frontend**: Run `npm run dev` in the `frontend` folder
-3. **Open Browser**: Navigate to `http://localhost:5173`
-4. **Generate Forecast**: Select date range and click "Generate Forecast"
+```bash
+cd backend
+python data_scraper.py
+python train_hybrid_models.py
+```
 
-### Dashboard Features
+To force a specific real dataset:
 
-- **Live Grid Status**: Real-time frequency, load, schedule, and OD/UD values
-- **Forecast Chart**: Interactive visualization of LSTM and GRU predictions
-- **Model Stats**: Peak, min, and average values for each model
+```bash
+python train_hybrid_models.py --data data/karnataka_realdata.csv --epochs 60
+```
 
-### Analytics Page
+Real source used:
 
-- Hourly load patterns
-- Model comparison charts
-- Load distribution histogram
-- Prediction variance analysis
+- Karnataka SLDC archived daily load-curve workbooks published by KPTCL
+- Bengaluru weather history from Open-Meteo
+- Karnataka holiday calendar
 
----
+Important note:
 
-## 🔌 API Endpoints
+- The new default training path is real Karnataka state load, not synthetic data
+- The old synthetic sample-data path should not be used for training
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/predict` | POST | Generate load forecast for date range |
-| `/model-metrics` | GET | Get model performance metrics |
-| `/realtime-status` | GET | Get current grid status |
-| `/historical-accuracy` | GET | Get historical accuracy data |
-| `/health` | GET | Health check endpoint |
+## API Endpoints
+
+- `POST /predict`: generate load forecast for a date range
+- `GET /model-metrics`: get saved training metrics
+- `GET /realtime-status`: get current simulated Bengaluru grid status
+- `GET /historical-accuracy`: get recent accuracy summary
+- `GET /health`: health check
 
 ### Example Request
 
@@ -154,58 +83,34 @@ curl -X POST "http://localhost:8002/predict" \
   -d '{"start_date": "2026-01-17", "end_date": "2026-01-18"}'
 ```
 
----
+## Project Structure
 
-## 📁 Project Structure
-
-```
+```text
 load_forecast_prediction/
-├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── model.py             # Model service & prediction logic
-│   ├── schemas.py           # Pydantic schemas
-│   ├── train_hybrid_models.py  # Model training script
-│   ├── requirements.txt     # Python dependencies
-│   ├── data/
-│   │   └── delhi.csv        # Historical load data
-│   └── models/
-│       ├── lstm_model.keras # Trained LSTM model
-│       ├── gru_model.keras  # Trained GRU model
-│       └── lgb_model.txt    # LightGBM model
-├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── Analytics.jsx
-│   │   │   └── AboutModels.jsx
-│   │   ├── components/
-│   │   │   ├── ForecastChart.jsx
-│   │   │   ├── ControlPanel.jsx
-│   │   │   └── Navigation.jsx
-│   │   └── services/
-│   │       └── api.js
-│   └── package.json
-└── README.md
+|-- backend/
+|   |-- main.py
+|   |-- model.py
+|   |-- schemas.py
+|   |-- train_hybrid_models.py
+|   |-- train_and_save.py
+|   |-- requirements.txt
+|   |-- data/
+|   |   `-- karnataka_realdata.csv
+|   `-- models/
+|       |-- lstm_model.keras
+|       |-- gru_model.keras
+|       `-- lgb_model.txt
+`-- frontend/
+    |-- src/
+    `-- package.json
 ```
 
----
+## Notes
 
-## 👥 Team
+- The backend now reads saved model metadata so the UI can show the actual training metrics after you retrain.
+- The real-data scraper depends on the official KPTCL workbook archive and Open-Meteo weather API.
 
-| Name | Role |
-|------|------|
-| Nikhil GC | Developer |
+## References
 
----
-
-## 📝 License
-
-This project is for educational and research purposes.
-
----
-
-## 🔗 References
-
-- [Delhi SLDC](https://www.delhisldc.org/)
 - [LightGBM Documentation](https://lightgbm.readthedocs.io/)
 - [TensorFlow/Keras](https://www.tensorflow.org/)
