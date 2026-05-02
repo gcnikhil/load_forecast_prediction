@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useData } from '../contexts/DataContext';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     LineChart, Line, AreaChart, Area, PieChart, Pie, Cell
@@ -10,20 +11,28 @@ import {
 } from 'lucide-react';
 
 const Analytics = () => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const { data: sharedData, setData: setSharedData, metrics: sharedMetrics, setMetrics: setSharedMetrics } = useData();
+    const [data, setData] = useState(sharedData);
+    const [loading, setLoading] = useState(!sharedData);
     const [error, setError] = useState(null);
-    const [metrics, setMetrics] = useState(null);
+    const [metrics, setMetrics] = useState(sharedMetrics);
 
     useEffect(() => {
+        if (sharedData && sharedMetrics) {
+            setData(sharedData);
+            setMetrics(sharedMetrics);
+            setLoading(false);
+            return;
+        }
+
         const fetchData = async () => {
             try {
                 const today = new Date();
                 const yesterday = new Date(today);
                 yesterday.setDate(today.getDate() - 1);
-                
+
                 const formatDate = (d) => d.toISOString().split('T')[0];
-                
+
                 const [result, metricsData] = await Promise.all([
                     predictLoad(formatDate(yesterday), formatDate(today)),
                     getModelMetrics()
@@ -32,9 +41,11 @@ const Analytics = () => {
                 if (!result || !result.loads_lightgbm_lstm || !result.loads_lightgbm_gru) {
                     throw new Error("Invalid data format");
                 }
-                
+
                 setData(result);
                 setMetrics(metricsData);
+                setSharedData(result);
+                setSharedMetrics(metricsData);
             } catch (err) {
                 console.error("Analytics error:", err);
                 setError(err.message);
@@ -43,7 +54,7 @@ const Analytics = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [sharedData, sharedMetrics, setSharedData, setSharedMetrics]);
 
     if (loading) return (
         <div className="flex items-center justify-center min-h-[60vh] text-[#00FFF6]">

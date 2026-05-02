@@ -144,12 +144,13 @@ class BengaluruDataScraper:
             year=day.year,
         )
 
-    def download_daily_loadcurve(self, day: datetime) -> Optional[bytes]:
+    def download_daily_loadcurve(self, day: datetime, log_missing: bool = True) -> Optional[bytes]:
         """Download one official KPTCL daily load-curve workbook."""
         url = self.build_loadcurve_url(day)
         response = requests.get(url, timeout=self.request_timeout)
         if response.status_code == 404:
-            logger.warning(f"No KPTCL load-curve workbook found for {day.date()} at {url}")
+            if log_missing:
+                logger.warning(f"No KPTCL load-curve workbook found for {day.date()} at {url}")
             return None
         response.raise_for_status()
         logger.info(f"Downloaded KPTCL load curve for {day.date()}")

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useData } from '../contexts/DataContext';
 import clsx from 'clsx';
 import { predictLoad, getRealtimeStatus } from '../services/api';
 import ForecastChart from '../components/ForecastChart';
@@ -6,12 +7,18 @@ import ControlPanel from '../components/ControlPanel';
 import StatsCard from '../components/StatsCard';
 import { Activity, Zap, TrendingUp, AlertCircle, Maximize2, Minimize2, Radio, TrendingDown, BarChart3 } from 'lucide-react';
 
+const formatNullable = (value, suffix = '') => {
+    if (value === null || value === undefined) {
+        return 'N/A';
+    }
+    return `${value}${suffix}`;
+};
+
 const Dashboard = () => {
-    const [data, setData] = useState(null);
+    const { data, setData, realtimeStatus, setRealtimeStatus } = useData();
     const [loading, setLoading] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [error, setError] = useState(null);
-    const [realtimeStatus, setRealtimeStatus] = useState(null);
 
     // Fetch real-time status every 10 seconds
     useEffect(() => {
@@ -57,7 +64,7 @@ const Dashboard = () => {
 
     // Calculate model comparison stats
     const getModelStats = () => {
-        if (!data) return null;
+        if (!data || !data.loads_lightgbm_lstm || data.loads_lightgbm_lstm.length === 0) return null;
         const lstmLoads = data.loads_lightgbm_lstm;
         const gruLoads = data.loads_lightgbm_gru;
         
@@ -92,33 +99,33 @@ const Dashboard = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-3 text-center">
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Frequency</p>
-                            <p className="text-sm md:text-lg font-mono text-[#00FFF6]">{realtimeStatus.frequency_hz} Hz</p>
+                            <p className="text-sm md:text-lg font-mono text-[#00FFF6]">{formatNullable(realtimeStatus.frequency_hz, ' Hz')}</p>
                         </div>
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Current Load</p>
-                            <p className="text-sm md:text-lg font-mono text-white">{realtimeStatus.current_load_mw} MW</p>
+                            <p className="text-sm md:text-lg font-mono text-white">{formatNullable(realtimeStatus.current_load_mw, ' MW')}</p>
                         </div>
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Schedule</p>
-                            <p className="text-sm md:text-lg font-mono text-slate-300">{realtimeStatus.schedule_mw} MW</p>
+                            <p className="text-sm md:text-lg font-mono text-slate-300">{formatNullable(realtimeStatus.schedule_mw, ' MW')}</p>
                         </div>
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Drawal</p>
-                            <p className="text-sm md:text-lg font-mono text-slate-300">{realtimeStatus.drawal_mw} MW</p>
+                            <p className="text-sm md:text-lg font-mono text-slate-300">{formatNullable(realtimeStatus.drawal_mw, ' MW')}</p>
                         </div>
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">OD/UD</p>
-                            <p className={`text-sm md:text-lg font-mono ${realtimeStatus.od_ud_mw >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {realtimeStatus.od_ud_mw} MW
+                            <p className={`text-sm md:text-lg font-mono ${realtimeStatus.od_ud_mw === null || realtimeStatus.od_ud_mw === undefined ? 'text-slate-500' : realtimeStatus.od_ud_mw >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {formatNullable(realtimeStatus.od_ud_mw, ' MW')}
                             </p>
                         </div>
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Today Max</p>
-                            <p className="text-sm md:text-lg font-mono text-[#FF2A6D]">{realtimeStatus.today_max.value} MW</p>
+                            <p className="text-sm md:text-lg font-mono text-[#FF2A6D]">{formatNullable(realtimeStatus.today_max?.value, ' MW')}</p>
                         </div>
                         <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
                             <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Today Min</p>
-                            <p className="text-sm md:text-lg font-mono text-[#00FFF6]">{realtimeStatus.today_min.value} MW</p>
+                            <p className="text-sm md:text-lg font-mono text-[#00FFF6]">{formatNullable(realtimeStatus.today_min?.value, ' MW')}</p>
                         </div>
                     </div>
                 </div>
@@ -132,6 +139,19 @@ const Dashboard = () => {
                         <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start space-x-3">
                             <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                             <p className="text-sm text-red-200">{error}</p>
+                        </div>
+                    )}
+
+                    {data?.used_dummy && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl flex items-start space-x-3">
+                            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                            <div className="text-sm text-amber-200">
+                                <p className="font-semibold">Dummy mode active</p>
+                                <p>
+                                    Forecast is using fallback prediction instead of the trained model.
+                                    {data?.dummy_reason ? ` Reason: ${data.dummy_reason}` : ''}
+                                </p>
+                            </div>
                         </div>
                     )}
 
@@ -224,8 +244,16 @@ const Dashboard = () => {
                             {isFullScreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                         </button>
 
-                        {data ? (
+                        {data && data.timestamps && data.timestamps.length > 0 ? (
                             <ForecastChart data={data} />
+                        ) : data ? (
+                            <div className="h-full flex flex-col items-center justify-center text-[#8A8F98] space-y-4 font-mono uppercase tracking-widest text-xs">
+                                <div className="p-4 bg-[#131b2d] border border-[#1e293b] shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+                                    <AlertCircle className="w-8 h-8 text-[#FF2A6D]" />
+                                </div>
+                                <p>NO_DATA_AVAILABLE</p>
+                                <p className="text-[10px] text-slate-600">The selected date range returned empty results.</p>
+                            </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-[#8A8F98] space-y-4 font-mono uppercase tracking-widest text-xs animate-pulse">
                                 <div className="p-4 bg-[#131b2d] border border-[#1e293b] shadow-[0_0_15px_rgba(0,0,0,0.5)]">

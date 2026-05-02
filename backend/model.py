@@ -16,11 +16,6 @@ import pandas as pd
 
 warnings.filterwarnings("ignore")
 
-BENGALURU_BASE_DEMAND_MW = 3800
-BENGALURU_PEAK_DEMAND_MW = 6200
-BENGALURU_MIN_DEMAND_MW = 2400
-BENGALURU_MAX_DEMAND_MW = 7800
-
 WEATHER_COLUMNS = [
     "temperature_celsius",
     "humidity_percent",
@@ -111,13 +106,22 @@ class ModelService:
         self.lstm_hybrid = HybridModel("LightGBM + LSTM", "lstm")
         self.gru_hybrid = HybridModel("LightGBM + GRU", "gru")
         self.base_data = None
-        self.model_dir = "models"
-        self.data_dir = "data"
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.model_dir = os.path.join(base_dir, "models")
+        self.data_dir = os.path.join(base_dir, "data")
         self._is_loaded = False
         self.weather_profile = None
         self.forecast_weather = None
-        self.load_min_mw = BENGALURU_MIN_DEMAND_MW
-        self.load_max_mw = BENGALURU_MAX_DEMAND_MW
+        self._forecast_weather_cache = None
+        self._forecast_weather_cache_until = None
+        self._forecast_weather_cache_days = 0
+        self.load_min_mw = None
+        self.load_max_mw = None
+        self.last_prediction_info = {
+            "used_dummy": False,
+            "dummy_reason": "",
+            "dummy_model": "",
+        }
 
     def load_models(self):
         """Load all models and historical data."""
@@ -139,6 +143,7 @@ class ModelService:
         """Load historical data for lag features and optional weather features."""
         data_files = [
             os.path.join(self.data_dir, "karnataka_realdata.csv"),
+            os.path.join(self.data_dir, "bengaluru_realdata.csv"),
             "karnataka_realdata.csv",
         ]
 
@@ -263,7 +268,28 @@ class ModelService:
         if not SCRAPER_AVAILABLE:
             return None
 
-        days_ahead = min(max((end_date.date() - datetime.now().date()).days + 2, 2), 16)
+        today = datetime.now().date()
+
+        # If the full requested range is in the past, weather forecast API is unnecessary.
+        if end_date.date() < today:
+            return None
+
+        # Open-Meteo expects forecast_days from today onward. Use only the necessary
+        # span for the requested prediction window, clamped to API limits.
+        window_start = max(start_date.date(), today)
+        window_end = max(end_date.date(), window_start)
+        days_ahead = min(max((window_end - today).days + 1, 1), 16)
+
+        # Cache short-lived forecast responses to avoid repeated network latency.
+        now = datetime.now()
+        if (
+            self._forecast_weather_cache is not None
+            and self._forecast_weather_cache_until is not None
+            and now <= self._forecast_weather_cache_until
+            and self._forecast_weather_cache_days >= days_ahead
+        ):
+            return self._forecast_weather_cache
+
         try:
             scraper = BengaluruDataScraper()
             forecast = scraper.fetch_forecast_weather(days_ahead=days_ahead)
@@ -272,6 +298,9 @@ class ModelService:
             forecast["timestamp"] = pd.to_datetime(forecast["timestamp"], errors="coerce")
             forecast = forecast.dropna(subset=["timestamp"]).set_index("timestamp").sort_index()
             forecast = self._resample_frame(forecast[WEATHER_COLUMNS], "5min")
+            self._forecast_weather_cache = forecast
+            self._forecast_weather_cache_days = days_ahead
+            self._forecast_weather_cache_until = now + timedelta(minutes=30)
             return forecast
         except Exception:
             return None
@@ -283,6 +312,10 @@ class ModelService:
         if model_type == "gru":
             return self.gru_hybrid.lgb_model is not None
         return self._is_loaded
+
+    def get_last_prediction_info(self) -> Dict[str, str]:
+        """Get metadata from the most recent prediction call."""
+        return self.last_prediction_info.copy()
 
     def _get_daily_pattern(self, target_date: datetime) -> Optional[pd.Series]:
         """Get historical pattern for same day of week."""
@@ -326,6 +359,38 @@ class ModelService:
 
         return context
 
+    def _fetch_actuals_for_range(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """Fetch actuals for the requested range, using base_data and scraper if needed."""
+        actuals = pd.DataFrame()
+        if self.base_data is not None:
+            mask = (self.base_data.index >= start_date) & (self.base_data.index <= end_date)
+            actuals = self.base_data.loc[mask, ['load']].copy()
+            
+        max_actual = actuals.index.max() if not actuals.empty else (self.base_data.index.max() if self.base_data is not None else start_date - timedelta(days=1))
+        
+        if SCRAPER_AVAILABLE and max_actual < min(end_date, datetime.now()):
+            try:
+                from data_scraper import BengaluruDataScraper
+                scraper = BengaluruDataScraper()
+                scrape_start = (max_actual + timedelta(days=1)).strftime("%Y-%m-%d")
+                scrape_end = min(end_date, datetime.now()).strftime("%Y-%m-%d")
+                
+                scraped_df = scraper.fetch_historical_kptcl_load(scrape_start, scrape_end)
+                if not scraped_df.empty:
+                    scraped_df = scraped_df.set_index("timestamp")[["load_mw"]].rename(columns={"load_mw": "load"})
+                    actuals = pd.concat([actuals, scraped_df])
+                    if self.base_data is not None:
+                        self.base_data = pd.concat([self.base_data, scraped_df])
+                        self.base_data = self.base_data[~self.base_data.index.duplicated(keep='last')].sort_index()
+            except Exception as e:
+                print(f"Warning: Failed to scrape recent actuals: {e}")
+                
+        if not actuals.empty:
+            actuals = actuals[~actuals.index.duplicated(keep='last')].sort_index()
+            actuals_5min = actuals.resample("5min").interpolate(method="time")
+            return actuals_5min
+        return pd.DataFrame()
+
     def predict(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Generate predictions for a date range with optional weather-aware features."""
         timestamps = []
@@ -346,21 +411,52 @@ class ModelService:
         recent_loads = list(self.base_data["load"].values[-576:]) if self.base_data is not None else [mean_load] * 576
 
         feature_cols = self.lstm_hybrid.feature_cols or self.gru_hybrid.feature_cols or []
+        fallback_used = False
+        fallback_reason = ""
 
-        all_features = []
+        actuals_df = self._fetch_actuals_for_range(start_date, end_date)
+        base_preds = []
+        is_actual = []
+        
         for ts in timestamps:
+            actual_load = None
+            if not actuals_df.empty and ts in actuals_df.index and pd.notna(actuals_df.loc[ts, 'load']):
+                actual_load = float(actuals_df.loc[ts, 'load'])
+                
+            if actual_load is not None:
+                base_preds.append(actual_load)
+                recent_loads.append(actual_load)
+                is_actual.append(True)
+                continue
+                
             features = self._create_features(ts, recent_loads, daily_pattern, mean_load, feature_cols)
-            X = np.array([features.get(col, 0.0) for col in feature_cols])
-            all_features.append(X)
-            estimated = mean_load + 500 * np.sin(np.pi * (ts.hour - 6) / 12)
-            recent_loads.append(estimated)
+            if self.lstm_hybrid.lgb_model and feature_cols:
+                X = np.array([features.get(col, 0.0) for col in feature_cols], dtype=float).reshape(1, -1)
+                try:
+                    base_pred = float(self.lstm_hybrid.lgb_model.predict(X)[0])
+                except Exception as exc:
+                    fallback_used = True
+                    if not fallback_reason:
+                        fallback_reason = f"LightGBM prediction failed: {exc}"
+                    # Do not synthesize fallback values; mark as unavailable
+                    base_pred = float("nan")
+            else:
+                fallback_used = True
+                if not fallback_reason:
+                    if self.lstm_hybrid.lgb_model is None:
+                        fallback_reason = "LightGBM model artifact is not loaded"
+                    else:
+                        fallback_reason = "Model feature metadata is missing"
+                # Do not synthesize fallback values; mark as unavailable
+                base_pred = float("nan")
 
-        X_batch = np.array(all_features)
+            base_preds.append(base_pred)
+            # Use previous model prediction as the next-step lag signal.
+            recent_loads.append(base_pred)
+            # Mark this timestep as a model-generated value (not an actual observation)
+            is_actual.append(False)
 
-        if self.lstm_hybrid.lgb_model:
-            base_preds = self.lstm_hybrid.lgb_model.predict(X_batch)
-        else:
-            base_preds = np.array([self._fallback_prediction(ts, daily_pattern, mean_load) for ts in timestamps])
+        base_preds = np.array(base_preds, dtype=float)
 
         # Use actual LSTM model for residual prediction
         lstm_preds = base_preds.copy().astype(float)
@@ -369,7 +465,8 @@ class ModelService:
                 base_preds,
                 self.lstm_hybrid.nn_model,
                 self.lstm_hybrid.residual_scaler,
-                nlags=self.lstm_hybrid.nlags
+                nlags=self.lstm_hybrid.nlags,
+                is_actual=is_actual,
             )
         
         # Use actual GRU model for residual prediction
@@ -379,11 +476,23 @@ class ModelService:
                 base_preds,
                 self.gru_hybrid.nn_model,
                 self.gru_hybrid.residual_scaler,
-                nlags=self.gru_hybrid.nlags
+                nlags=self.gru_hybrid.nlags,
+                is_actual=is_actual
             )
 
-        lstm_preds = np.clip(lstm_preds, self.load_min_mw, self.load_max_mw)
-        gru_preds = np.clip(gru_preds, self.load_min_mw, self.load_max_mw)
+        lower_bound = self.load_min_mw if self.load_min_mw is not None else float(np.min(recent_loads))
+        upper_bound = self.load_max_mw if self.load_max_mw is not None else float(np.max(recent_loads))
+        if upper_bound <= lower_bound:
+            upper_bound = lower_bound + max(100.0, abs(lower_bound) * 0.05)
+
+        lstm_preds = np.clip(lstm_preds, lower_bound, upper_bound)
+        gru_preds = np.clip(gru_preds, lower_bound, upper_bound)
+
+        self.last_prediction_info = {
+            "used_dummy": fallback_used,
+            "dummy_reason": fallback_reason,
+            "dummy_model": "fallback_prediction" if fallback_used else "",
+        }
 
         return pd.DataFrame(
             {
@@ -462,59 +571,95 @@ class ModelService:
 
         return f
 
-    def _apply_nn_residuals(self, base_preds: np.ndarray, nn_model, residual_scaler, nlags: int = 24) -> np.ndarray:
+    def _apply_nn_residuals(self, base_preds: np.ndarray, nn_model, residual_scaler, nlags: int = 24, is_actual: List[bool] = None) -> np.ndarray:
         """Apply neural network residual corrections to base predictions.
         
         The LSTM/GRU models are trained to predict residuals (actual - base_pred).
-        During inference, we use historical actual values to initialize, then
-        bootstrap forward using predicted residuals.
+        During inference, we bootstrap residuals from a neutral zero state and
+        roll forward only with predicted residuals.
         """
         preds = base_preds.copy().astype(float)
         
         if not TF_AVAILABLE:
             return preds
+            
+        import tensorflow as tf
         
         try:
-            # Get historical actual values to bootstrap the residual sequence
-            if self.base_data is not None and len(self.base_data) > 0:
-                hist_actuals = self.base_data["load"].values[-(nlags*2):]
+            # If base predictions contain NaNs (unavailable), skip NN residuals
+            if np.isnan(base_preds).any():
+                print("Info: Skipping NN residuals because some base predictions are NA")
+                return preds
+
+            steps = len(base_preds)
+            if steps == 0:
+                return preds
+
+            # Cache a tf.function per model object and nlags to avoid repetitive retracing
+            cache_key = (id(nn_model), int(nlags))
+            if not hasattr(ModelService, "_tf_predict_fn_cache"):
+                ModelService._tf_predict_fn_cache = {}
+
+            cached_fn = ModelService._tf_predict_fn_cache.get(cache_key)
+            if cached_fn is None:
+                # Define a TF function with explicit input signature so tracing is stable
+                @tf.function(
+                    input_signature=[
+                        tf.TensorSpec(shape=[1, int(nlags), 1], dtype=tf.float32),
+                        tf.TensorSpec(shape=(), dtype=tf.int32),
+                        tf.TensorSpec(shape=[None], dtype=tf.bool),
+                    ],
+                    reduce_retracing=True,
+                )
+                def _fast_residual_predict(initial_seq, num_steps, is_actual_mask):
+                    current_seq = initial_seq
+                    residuals = tf.TensorArray(tf.float32, size=num_steps)
+
+                    i = tf.constant(0)
+
+                    def cond(i, seq, res):
+                        return i < num_steps
+
+                    def body(i, seq, res):
+                        r = tf.cond(
+                            is_actual_mask[i],
+                            lambda: tf.constant(0.0, dtype=tf.float32),
+                            lambda: nn_model(seq, training=False)[0, 0],
+                        )
+                        res = res.write(i, r)
+                        r_tensor = tf.reshape(r, [1, 1, 1])
+                        seq = tf.concat([seq[:, 1:, :], r_tensor], axis=1)
+                        return i + 1, seq, res
+
+                    _, _, final_residuals = tf.while_loop(cond, body, [i, current_seq, residuals])
+                    return final_residuals.stack()
+
+                cached_fn = _fast_residual_predict
+                ModelService._tf_predict_fn_cache[cache_key] = cached_fn
+
+            # Start with zero residual history when true residual history is unavailable.
+            initial_seq = np.zeros((1, int(nlags), 1), dtype='float32')
+
+            if is_actual is None:
+                is_actual = [False] * steps
+            is_actual_tensor = tf.constant(is_actual, dtype=tf.bool)
+
+            # Predict using cached TF function
+            residuals_scaled_tensor = cached_fn(
+                tf.convert_to_tensor(initial_seq, dtype=tf.float32),
+                tf.constant(steps, dtype=tf.int32),
+                is_actual_tensor,
+            )
+            residuals_scaled = residuals_scaled_tensor.numpy().reshape(-1, 1)
+            
+            # Unscale residual
+            if residual_scaler is not None:
+                residuals_unscaled = residual_scaler.inverse_transform(residuals_scaled).flatten()
             else:
-                # Fallback: use base_preds as approximation
-                hist_actuals = base_preds[:min(nlags*2, len(base_preds))]
-            
-            # Initialize residual sequence with historical data
-            # We approximate historical residuals from historical load data
-            residual_history = hist_actuals.copy() if isinstance(hist_actuals, np.ndarray) else np.array(hist_actuals)
-            
-            # Predict residuals for each timestamp
-            predicted_residuals = []
-            current_residuals = residual_history[-nlags:].tolist()
-            
-            for i in range(len(base_preds)):
-                # Build sequence from current residual history
-                seq = np.array(current_residuals[-nlags:], dtype='float32')
-                X_seq = seq.reshape(1, nlags, 1)
-                
-                # Predict next residual (scaled)
-                residual_scaled = nn_model.predict(X_seq, verbose=0)[0, 0]
-                
-                # Unscale residual
-                if residual_scaler is not None:
-                    residual_unscaled = residual_scaler.inverse_transform(
-                        np.array([[residual_scaled]])
-                    )[0, 0]
-                else:
-                    residual_unscaled = residual_scaled
-                
-                predicted_residuals.append(residual_unscaled)
-                
-                # Add predicted residual to base prediction to get new "actual"
-                # This bootstrapped value becomes part of residual history
-                new_actual = base_preds[i] + residual_unscaled
-                current_residuals.append(new_actual)
+                residuals_unscaled = residuals_scaled.flatten()
             
             # Add residuals to base predictions
-            preds = preds + np.array(predicted_residuals)
+            preds = preds + residuals_unscaled
             
         except Exception as e:
             print(f"Warning: Error applying NN residuals: {e}")
@@ -528,7 +673,8 @@ class ModelService:
         if daily_pattern is not None:
             base = daily_pattern.get(ts.time(), mean_load)
         else:
-            hour = ts.hour + ts.minute / 60
-            base = BENGALURU_BASE_DEMAND_MW + 0.45 * (BENGALURU_PEAK_DEMAND_MW - BENGALURU_BASE_DEMAND_MW) * np.sin(np.pi * (hour - 6) / 12)
-        pred = base + np.random.normal(0, 50)
-        return float(np.clip(pred, self.load_min_mw, self.load_max_mw))
+            base = mean_load
+
+        lower_bound = self.load_min_mw if self.load_min_mw is not None else 0.0
+        upper_bound = self.load_max_mw if self.load_max_mw is not None else max(lower_bound + 100.0, mean_load * 2)
+        return float(np.clip(base, lower_bound, upper_bound))

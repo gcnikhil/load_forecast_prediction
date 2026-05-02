@@ -3,9 +3,11 @@ from datetime import datetime, timedelta
 
 import joblib
 import numpy as np
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from data_scraper import BengaluruDataScraper
 from model import ModelService
 from schemas import ForecastRequest, ForecastResponse
 
@@ -20,13 +22,33 @@ app.add_middleware(
 )
 
 model_service = ModelService()
+realtime_cache = {"expires_at": None, "payload": None, "error": None}
+REALTIME_CACHE_TTL_SECONDS = 300
+REALTIME_ERROR_CACHE_TTL_SECONDS = 120
+
+
+def _load_latest_available_curve(scraper: BengaluruDataScraper, reference_day: datetime, lookback_days: int = 7):
+    """Find the most recent available KPTCL workbook up to lookback window."""
+    for i in range(lookback_days + 1):
+        day = reference_day - timedelta(days=i)
+        workbook_bytes = scraper.download_daily_loadcurve(day, log_missing=False)
+        if workbook_bytes is None:
+            continue
+        try:
+            curve_df = scraper.parse_daily_loadcurve(workbook_bytes, day).sort_values("timestamp")
+            if not curve_df.empty:
+                return day, curve_df
+        except Exception:
+            continue
+    return None, None
 
 
 def load_training_metadata():
     """Load saved training metadata when available."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     metadata_paths = [
-        os.path.join("models", "metadata.joblib"),
-        os.path.join("backend", "models", "metadata.joblib"),
+        os.path.join(base_dir, "models", "metadata.joblib"),
+        os.path.join(base_dir, "metadata.joblib"),
     ]
     for path in metadata_paths:
         if os.path.exists(path):
@@ -62,15 +84,30 @@ async def predict_load(request: ForecastRequest):
         timestamps = forecast_df.index.strftime("%Y-%m-%d %H:%M").tolist()
         loads_lstm = forecast_df["loads_lightgbm_lstm"].tolist()
         loads_gru = forecast_df["loads_lightgbm_gru"].tolist()
-        all_loads = loads_lstm + loads_gru
+        import math
+
+        # Convert NaN to None for JSON-safe "NA" output
+        def _nan_to_none(x):
+            try:
+                return None if (isinstance(x, float) and math.isnan(x)) else x
+            except Exception:
+                return x
+
+        loads_lstm = [_nan_to_none(x) for x in loads_lstm]
+        loads_gru = [_nan_to_none(x) for x in loads_gru]
+        all_loads = [x for x in (loads_lstm + loads_gru) if x is not None]
+        prediction_info = model_service.get_last_prediction_info()
 
         return ForecastResponse(
             timestamps=timestamps,
             loads_lightgbm_lstm=loads_lstm,
             loads_lightgbm_gru=loads_gru,
-            min_load=min(all_loads) if all_loads else 0,
-            max_load=max(all_loads) if all_loads else 0,
-            mean_load=sum(all_loads) / len(all_loads) if all_loads else 0,
+            min_load=min(all_loads) if all_loads else None,
+            max_load=max(all_loads) if all_loads else None,
+            mean_load=(sum(all_loads) / len(all_loads)) if all_loads else None,
+            used_dummy=bool(prediction_info.get("used_dummy", False)),
+            dummy_reason=str(prediction_info.get("dummy_reason", "")),
+            dummy_model=str(prediction_info.get("dummy_model", "")),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -128,111 +165,165 @@ def get_model_metrics():
             "anti_overfit": metadata.get("anti_overfit", {}),
         }
 
-    return {
-        "lstm_hybrid": {
-            "name": "LightGBM + LSTM",
-            "rmse_mw": 9.54,
-            "mape_percent": 0.19,
-            "training_samples": 34560,
-            "features": 34,
-            "architecture": "LightGBM (1000 trees) + LSTM (64 units, 2 layers)",
-            "characteristics": "Better at capturing long-term temporal patterns",
-        },
-        "gru_hybrid": {
-            "name": "LightGBM + GRU",
-            "rmse_mw": 9.97,
-            "mape_percent": 0.21,
-            "training_samples": 34560,
-            "features": 34,
-            "architecture": "LightGBM (1000 trees) + GRU (64 units, 2 layers)",
-            "characteristics": "Faster training, better at short-term fluctuations",
-        },
-        "training_period": "Unavailable until real-data training is run",
-        "data_source": "Real Karnataka SLDC dataset not yet trained in this environment",
-    }
+    raise HTTPException(status_code=404, detail="Training metadata not available. Please train models on real data.")
 
 
 @app.get("/realtime-status")
 def get_realtime_status():
-    """Get real-time grid status based on Bengaluru/BESCOM-style values."""
+    """Get real-time status from Karnataka SLDC load-curve source only."""
     now = datetime.now()
-    hour = now.hour + now.minute / 60
 
-    base_load = 4720
-    base_schedule = 4580
-    base_drawal = 4515
-    base_generation = 620
-    base_frequency = 50.00
+    if (
+        realtime_cache.get("payload") is not None
+        and realtime_cache["expires_at"] is not None
+        and now <= realtime_cache["expires_at"]
+    ):
+        return realtime_cache["payload"]
 
-    if 2 <= hour < 5:
-        load_factor = 0.64
-        frequency_adj = 0.02
-    elif 9 <= hour < 12:
-        load_factor = 1.22
-        frequency_adj = -0.04
-    elif 18 <= hour < 21:
-        load_factor = 1.31
-        frequency_adj = -0.06
-    elif 12 <= hour < 18:
-        load_factor = 1.15
-        frequency_adj = -0.02
-    else:
-        load_factor = 1.0
-        frequency_adj = 0.0
+    if (
+        realtime_cache.get("error") is not None
+        and realtime_cache["expires_at"] is not None
+        and now <= realtime_cache["expires_at"]
+    ):
+        raise HTTPException(status_code=503, detail=realtime_cache["error"])
 
-    np.random.seed(int(now.timestamp()) % 1000)
-    variation = np.random.uniform(-0.02, 0.02)
+    try:
+        scraper = BengaluruDataScraper()
+        ref_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    current_load = int(base_load * load_factor * (1 + variation))
-    schedule = int(base_schedule * load_factor * (1 + variation * 0.5))
-    drawal = int(base_drawal * load_factor * (1 + variation * 0.5))
-    od_ud = drawal - schedule
-    generation = int(base_generation * (1 + variation * 0.3))
-    frequency = round(base_frequency + frequency_adj + np.random.uniform(-0.01, 0.01), 2)
+        today, today_df = _load_latest_available_curve(scraper, ref_day, lookback_days=7)
+        if today_df is None:
+            raise RuntimeError("No KPTCL load-curve workbook available in last 7 days")
 
-    return {
-        "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "frequency_hz": frequency,
-        "current_load_mw": current_load,
-        "schedule_mw": schedule,
-        "drawal_mw": drawal,
-        "od_ud_mw": od_ud,
-        "generation_mw": generation,
-        "today_max": {"value": 6210, "time": "20:05:00"},
-        "today_min": {"value": 2680, "time": "03:15:00"},
-        "yesterday_max": {"value": 6155, "time": "20:20:00"},
-        "yesterday_min": {"value": 2750, "time": "03:40:00"},
-    }
+        upto_now = today_df[today_df["timestamp"] <= now]
+        current_row = upto_now.iloc[-1] if not upto_now.empty else today_df.iloc[-1]
+        current_ts = pd.to_datetime(current_row["timestamp"])
+
+        current_load = float(current_row["load_mw"])
+        drawal = current_load
+        frequency = float(current_row["frequency_hz"]) if pd.notna(current_row["frequency_hz"]) else None
+
+        yesterday, yesterday_df = _load_latest_available_curve(scraper, today - timedelta(days=1), lookback_days=7)
+        if yesterday_df is None:
+            raise RuntimeError("No prior KPTCL workbook available for schedule comparison")
+
+        same_hour = yesterday_df[yesterday_df["timestamp"].dt.hour == current_ts.hour]
+        schedule = float(same_hour.iloc[-1]["load_mw"]) if not same_hour.empty else None
+        od_ud = (drawal - schedule) if schedule is not None else None
+
+        today_max_row = today_df.loc[today_df["load_mw"].idxmax()]
+        today_min_row = today_df.loc[today_df["load_mw"].idxmin()]
+        yday_max_row = yesterday_df.loc[yesterday_df["load_mw"].idxmax()]
+        yday_min_row = yesterday_df.loc[yesterday_df["load_mw"].idxmin()]
+
+        payload = {
+            "timestamp": current_ts.strftime("%Y-%m-%d %H:%M:%S"),
+            "frequency_hz": round(frequency, 2) if frequency is not None else None,
+            "current_load_mw": int(round(current_load)),
+            "schedule_mw": int(round(schedule)) if schedule is not None else None,
+            "drawal_mw": int(round(drawal)),
+            "od_ud_mw": int(round(od_ud)) if od_ud is not None else None,
+            # Generation is not present in KPTCL load-curve workbook; keep null instead of synthesizing.
+            "generation_mw": None,
+            "today_max": {
+                "value": int(round(float(today_max_row["load_mw"]))),
+                "time": pd.to_datetime(today_max_row["timestamp"]).strftime("%H:%M:%S"),
+            },
+            "today_min": {
+                "value": int(round(float(today_min_row["load_mw"]))),
+                "time": pd.to_datetime(today_min_row["timestamp"]).strftime("%H:%M:%S"),
+            },
+            "yesterday_max": {
+                "value": int(round(float(yday_max_row["load_mw"]))),
+                "time": pd.to_datetime(yday_max_row["timestamp"]).strftime("%H:%M:%S"),
+            },
+            "yesterday_min": {
+                "value": int(round(float(yday_min_row["load_mw"]))),
+                "time": pd.to_datetime(yday_min_row["timestamp"]).strftime("%H:%M:%S"),
+            },
+            "source": "kptcl_sldc_loadcurve",
+            "as_of_date": today.strftime("%Y-%m-%d"),
+            "schedule_reference_date": yesterday.strftime("%Y-%m-%d"),
+            "is_stale": today.date() < ref_day.date(),
+        }
+
+        realtime_cache["payload"] = payload
+        realtime_cache["error"] = None
+        realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_CACHE_TTL_SECONDS)
+        return payload
+    except Exception as exc:
+        detail = f"Real-time source unavailable: {exc}"
+        realtime_cache["payload"] = None
+        realtime_cache["error"] = detail
+        realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_ERROR_CACHE_TTL_SECONDS)
+        raise HTTPException(status_code=503, detail=detail)
 
 
 @app.get("/historical-accuracy")
 def get_historical_accuracy():
-    """Get historical model accuracy for demonstration."""
+    """Get historical model accuracy computed from actual historical data."""
+    if not model_service.is_loaded() or model_service.base_data is None:
+        raise HTTPException(status_code=503, detail="Model or historical data not loaded")
+        
     days = []
-    base_date = datetime.now() - timedelta(days=7)
+    base_data = model_service.base_data
+    
+    # Check if we have enough data
+    if len(base_data) < 288 * 7:
+        raise HTTPException(status_code=400, detail="Not enough historical data to compute accuracy")
 
-    for i in range(7):
-        date = base_date + timedelta(days=i)
-        days.append(
-            {
-                "date": date.strftime("%Y-%m-%d"),
-                "lstm_mape": round(0.15 + np.random.uniform(0, 0.1), 2),
-                "gru_mape": round(0.18 + np.random.uniform(0, 0.12), 2),
-                "lstm_rmse": round(8.5 + np.random.uniform(0, 3), 1),
-                "gru_rmse": round(9.0 + np.random.uniform(0, 3.5), 1),
-            }
-        )
+    # Get the last 7 days from the dataset
+    end_date = base_data.index.max().replace(hour=23, minute=55, second=0, microsecond=0)
+    start_date = (end_date - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    try:
+        # Run predictions for the last 7 days
+        predictions_df = model_service.predict(start_date, end_date)
+        
+        # Merge predictions with actuals
+        merged = predictions_df.join(base_data['load'], how='inner')
+        if merged.empty:
+            raise HTTPException(status_code=400, detail="Could not align predictions with actual data")
+            
+        # Calculate daily metrics
+        for i in range(7):
+            day = start_date + timedelta(days=i)
+            next_day = day + timedelta(days=1)
+            daily_data = merged[(merged.index >= day) & (merged.index < next_day)]
+            
+            if len(daily_data) > 0:
+                actual = daily_data['load'].values
+                lstm_pred = daily_data['loads_lightgbm_lstm'].values
+                gru_pred = daily_data['loads_lightgbm_gru'].values
+                
+                lstm_mape = np.mean(np.abs((actual - lstm_pred) / actual)) * 100
+                gru_mape = np.mean(np.abs((actual - gru_pred) / actual)) * 100
+                lstm_rmse = np.sqrt(np.mean((actual - lstm_pred)**2))
+                gru_rmse = np.sqrt(np.mean((actual - gru_pred)**2))
+                
+                days.append({
+                    "date": day.strftime("%Y-%m-%d"),
+                    "lstm_mape": round(float(lstm_mape), 2),
+                    "gru_mape": round(float(gru_mape), 2),
+                    "lstm_rmse": round(float(lstm_rmse), 1),
+                    "gru_rmse": round(float(gru_rmse), 1),
+                })
+        
+        if not days:
+            raise HTTPException(status_code=400, detail="No data available for the period")
 
-    return {
-        "period": "Last 7 days",
-        "daily_accuracy": days,
-        "average": {
-            "lstm_mape": round(np.mean([d["lstm_mape"] for d in days]), 2),
-            "gru_mape": round(np.mean([d["gru_mape"] for d in days]), 2),
-            "lstm_rmse": round(np.mean([d["lstm_rmse"] for d in days]), 1),
-            "gru_rmse": round(np.mean([d["gru_rmse"] for d in days]), 1),
-        },
-    }
+        return {
+            "period": "Last 7 days of actual data",
+            "daily_accuracy": days,
+            "average": {
+                "lstm_mape": round(np.mean([d["lstm_mape"] for d in days]), 2),
+                "gru_mape": round(np.mean([d["gru_mape"] for d in days]), 2),
+                "lstm_rmse": round(np.mean([d["lstm_rmse"] for d in days]), 1),
+                "gru_rmse": round(np.mean([d["gru_rmse"] for d in days]), 1),
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
