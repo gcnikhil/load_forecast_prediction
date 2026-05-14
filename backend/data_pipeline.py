@@ -263,7 +263,7 @@ class DataPipeline:
                     df = pd.read_csv(f, header=None, names=['datetime', 'load'])
                     df['datetime'] = pd.to_datetime(df['datetime'], format='%d/%m/%Y %H:%M')
                     dfs.append(df)
-                except:
+                except Exception:
                     continue
         
         # Load live data
@@ -272,7 +272,7 @@ class DataPipeline:
                 df = pd.read_csv(self.live_data_file, header=None, names=['datetime', 'load'])
                 df['datetime'] = pd.to_datetime(df['datetime'], format='%d/%m/%Y %H:%M')
                 dfs.append(df)
-            except:
+            except Exception:
                 pass
         
         if dfs:

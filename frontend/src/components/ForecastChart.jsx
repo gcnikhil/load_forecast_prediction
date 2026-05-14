@@ -60,40 +60,6 @@ const ForecastChart = ({ data }) => {
     const peakLoad = chartData.length ? Math.max(...chartData.map(d => Math.max(d.lstm_hybrid, d.gru_hybrid))) : 0;
     const minLoad = chartData.length ? Math.min(...chartData.map(d => Math.min(d.lstm_hybrid, d.gru_hybrid))) : 0;
 
-    // Custom tooltip
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            const lstmVal = payload.find(p => p.dataKey === 'lstm_hybrid')?.value || 0;
-            const gruVal = payload.find(p => p.dataKey === 'gru_hybrid')?.value || 0;
-            const diff = gruVal - lstmVal;
-            
-            return (
-                <div className="bg-[#0B0F1A] border border-[#00FFF6]/50 p-3 font-mono text-xs shadow-lg">
-                    <p className="text-slate-400 mb-2 border-b border-[#1e293b] pb-1">{label}</p>
-                    <div className="space-y-1">
-                        <p className="flex justify-between gap-4">
-                            <span className="text-[#00FFF6]">LSTM:</span>
-                            <span className="text-white font-bold">{lstmVal.toLocaleString()} MW</span>
-                        </p>
-                        <p className="flex justify-between gap-4">
-                            <span className="text-[#FF2A6D]">GRU:</span>
-                            <span className="text-white font-bold">{gruVal.toLocaleString()} MW</span>
-                        </p>
-                        <div className="border-t border-[#1e293b] pt-1 mt-1">
-                            <p className="flex justify-between gap-4">
-                                <span className="text-[#F9F871]">Δ:</span>
-                                <span className={diff >= 0 ? 'text-green-400' : 'text-red-400'}>
-                                    {diff >= 0 ? '+' : ''}{diff} MW
-                                </span>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-        return null;
-    };
-
     // Sample data for X-axis (show every 2 hours for readability)
     const tickFormatter = (value, index) => {
         if (chartData.length <= 48) return value.split(' ')[1]?.substring(0, 5) || value;

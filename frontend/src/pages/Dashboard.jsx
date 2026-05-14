@@ -26,15 +26,15 @@ const Dashboard = () => {
             try {
                 const status = await getRealtimeStatus();
                 setRealtimeStatus(status);
-            } catch (err) {
-                console.error("Failed to fetch realtime status");
+            } catch (error) {
+                console.error("Failed to fetch realtime status", error);
             }
         };
         
         fetchStatus();
         const interval = setInterval(fetchStatus, 10000);
         return () => clearInterval(interval);
-    }, []);
+    }, [setRealtimeStatus]);
 
     const handlePredict = async (startDate, endDate) => {
         setLoading(true);

@@ -132,7 +132,7 @@ class BengaluruDataScraper:
         """Fetch Karnataka holidays."""
         import holidays
 
-        india_holidays = holidays.India(state=state, years=year)
+        india_holidays = holidays.IN(subdiv=state, years=year)
         logger.info(f"Loaded {len(india_holidays)} holidays for {state} in {year}")
         return india_holidays
 

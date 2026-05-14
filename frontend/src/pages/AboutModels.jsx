@@ -10,8 +10,8 @@ const AboutModels = () => {
             try {
                 const data = await getModelMetrics();
                 setMetrics(data);
-            } catch (err) {
-                console.error("Failed to fetch metrics");
+            } catch (error) {
+                console.error("Failed to fetch metrics", error);
             }
         };
         fetchMetrics();

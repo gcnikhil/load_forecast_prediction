@@ -1,3 +1,6 @@
+import React from 'react';
+
+// eslint-disable-next-line no-unused-vars
 const StatsCard = ({ title, value, icon: Icon, color }) => {
     return (
         <div className="bg-[#0B0F1A] border border-[#1e293b] p-4 flex items-center space-x-4 hover:border-[#00FFF6]/50 hover:shadow-[0_0_15px_rgba(0,255,246,0.1)] transition-all group relative overflow-hidden">

@@ -408,9 +408,9 @@ def train_hybrid_model(data_path: str, model_dir: str, epochs: int = 60):
     lstm_X_val, lstm_y_val = create_sequences(residuals_val_scaled, nlags)
     lstm_X_test, _ = create_sequences(residuals_test_scaled, nlags)
 
-    lstm_X_train = lstm_X_train.reshape(-1, nlags, 1)
-    lstm_X_val = lstm_X_val.reshape(-1, nlags, 1)
-    lstm_X_test = lstm_X_test.reshape(-1, nlags, 1)
+    lstm_X_train = lstm_X_train.reshape((-1, nlags, 1))
+    lstm_X_val = lstm_X_val.reshape((-1, nlags, 1))
+    lstm_X_test = lstm_X_test.reshape((-1, nlags, 1))
 
     callbacks = [
         EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True, verbose=1),

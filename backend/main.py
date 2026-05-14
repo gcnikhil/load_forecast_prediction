@@ -110,7 +110,7 @@ async def predict_load(request: ForecastRequest):
             dummy_model=str(prediction_info.get("dummy_model", "")),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/health")
@@ -256,7 +256,7 @@ def get_realtime_status():
         realtime_cache["payload"] = None
         realtime_cache["error"] = detail
         realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_ERROR_CACHE_TTL_SECONDS)
-        raise HTTPException(status_code=503, detail=detail)
+        raise HTTPException(status_code=503, detail=detail) from exc
 
 
 @app.get("/historical-accuracy")
@@ -323,7 +323,7 @@ def get_historical_accuracy():
             },
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 if __name__ == "__main__":

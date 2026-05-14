@@ -332,7 +332,7 @@ class ModelService:
         if not HOLIDAYS_AVAILABLE:
             return int(ts.weekday() >= 5)
         try:
-            india_holidays = holidays.India(state="KA", years=[ts.year])
+            india_holidays = holidays.IN(subdiv="KA", years=[ts.year])
             return int(ts.date() in india_holidays)
         except Exception:
             return int(ts.weekday() >= 5)
