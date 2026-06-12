@@ -76,13 +76,12 @@ async def predict_load(request: ForecastRequest):
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="End date must be after start date")
 
-        if (end_date - start_date).days > 7:
-            raise HTTPException(status_code=400, detail="Maximum forecast range is 7 days")
+        if (end_date - start_date).days > 3:
+            raise HTTPException(status_code=400, detail="Maximum forecast range is 3 days")
 
         forecast_df = model_service.predict(start_date, end_date)
 
         timestamps = forecast_df.index.strftime("%Y-%m-%d %H:%M").tolist()
-        loads_lstm = forecast_df["loads_lightgbm_lstm"].tolist()
         loads_gru = forecast_df["loads_lightgbm_gru"].tolist()
         import math
 
@@ -93,14 +92,12 @@ async def predict_load(request: ForecastRequest):
             except Exception:
                 return x
 
-        loads_lstm = [_nan_to_none(x) for x in loads_lstm]
         loads_gru = [_nan_to_none(x) for x in loads_gru]
-        all_loads = [x for x in (loads_lstm + loads_gru) if x is not None]
+        all_loads = [x for x in loads_gru if x is not None]
         prediction_info = model_service.get_last_prediction_info()
 
         return ForecastResponse(
             timestamps=timestamps,
-            loads_lightgbm_lstm=loads_lstm,
             loads_lightgbm_gru=loads_gru,
             min_load=min(all_loads) if all_loads else None,
             max_load=max(all_loads) if all_loads else None,
@@ -124,7 +121,6 @@ def get_model_metrics():
     metadata = load_training_metadata()
     if metadata:
         metrics = metadata.get("metrics", {})
-        lstm_metrics = metrics.get("lstm_hybrid", {})
         gru_metrics = metrics.get("gru_hybrid", {})
         training_start = metadata.get("training_period_start", "")
         training_end = metadata.get("training_period_end", "")
@@ -133,18 +129,6 @@ def get_model_metrics():
             training_period = f"{training_start[:10]} to {training_end[:10]}"
 
         return {
-            "lstm_hybrid": {
-                "name": "LightGBM + LSTM",
-                "rmse_mw": round(float(lstm_metrics.get("rmse", 0)), 2),
-                "mape_percent": round(float(lstm_metrics.get("mape", 0)), 2),
-                "training_samples": int(metadata.get("training_samples", 0)),
-                "features": int(metadata.get("feature_count", 0)),
-                "architecture": metadata.get("architecture", {}).get(
-                    "lstm_hybrid",
-                    "LightGBM + LSTM hybrid",
-                ),
-                "characteristics": "Regularized residual model for smoother temporal correction",
-            },
             "gru_hybrid": {
                 "name": "LightGBM + GRU",
                 "rmse_mw": round(float(gru_metrics.get("rmse", 0)), 2),
@@ -293,19 +277,14 @@ def get_historical_accuracy():
             
             if len(daily_data) > 0:
                 actual = daily_data['load'].values
-                lstm_pred = daily_data['loads_lightgbm_lstm'].values
                 gru_pred = daily_data['loads_lightgbm_gru'].values
                 
-                lstm_mape = np.mean(np.abs((actual - lstm_pred) / actual)) * 100
                 gru_mape = np.mean(np.abs((actual - gru_pred) / actual)) * 100
-                lstm_rmse = np.sqrt(np.mean((actual - lstm_pred)**2))
                 gru_rmse = np.sqrt(np.mean((actual - gru_pred)**2))
                 
                 days.append({
                     "date": day.strftime("%Y-%m-%d"),
-                    "lstm_mape": round(float(lstm_mape), 2),
                     "gru_mape": round(float(gru_mape), 2),
-                    "lstm_rmse": round(float(lstm_rmse), 1),
                     "gru_rmse": round(float(gru_rmse), 1),
                 })
         
@@ -316,9 +295,7 @@ def get_historical_accuracy():
             "period": "Last 7 days of actual data",
             "daily_accuracy": days,
             "average": {
-                "lstm_mape": round(np.mean([d["lstm_mape"] for d in days]), 2),
                 "gru_mape": round(np.mean([d["gru_mape"] for d in days]), 2),
-                "lstm_rmse": round(np.mean([d["lstm_rmse"] for d in days]), 1),
                 "gru_rmse": round(np.mean([d["gru_rmse"] for d in days]), 1),
             },
         }

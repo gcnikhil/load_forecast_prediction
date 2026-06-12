@@ -253,17 +253,26 @@ class BengaluruDataScraper:
             holidays_data.update(self.fetch_indian_holidays(year))
 
         merged = load_df.merge(weather_df, on="timestamp", how="inner")
-        merged["date"] = merged["timestamp"].dt.date
-        merged["is_holiday"] = merged["date"].isin(holidays_data.keys())
-        merged["holiday_name"] = merged["date"].map({date: name for date, name in holidays_data.items()})
+        
+        # Determine public holidays and Sundays
+        is_public_holiday = merged["timestamp"].dt.date.isin(holidays_data.keys())
+        is_sunday = merged["timestamp"].dt.dayofweek == 6
+        
+        merged["is_holiday"] = is_public_holiday | is_sunday
+        
+        # Map holiday name, default to 'Sunday' if it's not a public holiday
+        merged["holiday_name"] = merged["timestamp"].dt.date.map({date: name for date, name in holidays_data.items()})
+        merged.loc[is_sunday & ~is_public_holiday, "holiday_name"] = "Sunday"
+        
         merged["day_of_week"] = merged["timestamp"].dt.day_name()
         merged["hour_of_day"] = merged["timestamp"].dt.hour
         merged["day_of_year"] = merged["timestamp"].dt.dayofyear
-        merged["weather_data_source"] = "open-meteo"
-        merged["has_real_load"] = True
-        merged["grid_region"] = "karnataka_state"
 
         merged = merged.sort_values("timestamp").drop_duplicates(subset=["timestamp"])
+        
+        # Drop redundant metadata columns that provide no value for machine learning
+        cols_to_drop = ["date", "load_data_source", "load_curve_url"]
+        merged = merged.drop(columns=[col for col in cols_to_drop if col in merged.columns], errors="ignore")
 
         os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
         merged.to_csv(output_path, index=False)

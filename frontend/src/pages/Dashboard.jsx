@@ -62,21 +62,16 @@ const Dashboard = () => {
         }
     };
 
-    // Calculate model comparison stats
+    // Calculate model stats
     const getModelStats = () => {
-        if (!data || !data.loads_lightgbm_lstm || data.loads_lightgbm_lstm.length === 0) return null;
-        const lstmLoads = data.loads_lightgbm_lstm;
+        if (!data || !data.loads_lightgbm_gru || data.loads_lightgbm_gru.length === 0) return null;
         const gruLoads = data.loads_lightgbm_gru;
-        
-        const lstmMax = Math.max(...lstmLoads);
-        const lstmMin = Math.min(...lstmLoads);
-        const lstmAvg = lstmLoads.reduce((a, b) => a + b, 0) / lstmLoads.length;
         
         const gruMax = Math.max(...gruLoads);
         const gruMin = Math.min(...gruLoads);
         const gruAvg = gruLoads.reduce((a, b) => a + b, 0) / gruLoads.length;
         
-        return { lstmMax, lstmMin, lstmAvg, gruMax, gruMin, gruAvg };
+        return { gruMax, gruMin, gruAvg };
     };
 
     const modelStats = getModelStats();
@@ -157,31 +152,10 @@ const Dashboard = () => {
 
                     {modelStats && (
                         <div className="space-y-3">
-                            {/* LSTM Model Stats */}
-                            <div className="bg-[#0B0F1A] border border-[#00FFF6]/30 p-4">
-                                <h4 className="text-xs font-mono text-[#00FFF6] uppercase mb-3 flex items-center gap-2">
-                                    <BarChart3 className="w-4 h-4" /> LSTM_HYBRID
-                                </h4>
-                                <div className="grid grid-cols-3 gap-2 text-center">
-                                    <div>
-                                        <p className="text-[10px] text-slate-500">PEAK</p>
-                                        <p className="text-sm font-mono text-[#00FFF6]">{modelStats.lstmMax.toFixed(0)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-500">MIN</p>
-                                        <p className="text-sm font-mono text-slate-300">{modelStats.lstmMin.toFixed(0)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-500">AVG</p>
-                                        <p className="text-sm font-mono text-slate-300">{modelStats.lstmAvg.toFixed(0)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             {/* GRU Model Stats */}
                             <div className="bg-[#0B0F1A] border border-[#FF2A6D]/30 p-4">
                                 <h4 className="text-xs font-mono text-[#FF2A6D] uppercase mb-3 flex items-center gap-2">
-                                    <BarChart3 className="w-4 h-4" /> GRU_HYBRID
+                                    <BarChart3 className="w-4 h-4" /> GRU_HYBRID FORECAST
                                 </h4>
                                 <div className="grid grid-cols-3 gap-2 text-center">
                                     <div>
@@ -195,27 +169,6 @@ const Dashboard = () => {
                                     <div>
                                         <p className="text-[10px] text-slate-500">AVG</p>
                                         <p className="text-sm font-mono text-slate-300">{modelStats.gruAvg.toFixed(0)}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Model Difference */}
-                            <div className="bg-[#0B0F1A] border border-[#F9F871]/30 p-4">
-                                <h4 className="text-xs font-mono text-[#F9F871] uppercase mb-3 flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4" /> MODEL_DIFF
-                                </h4>
-                                <div className="grid grid-cols-2 gap-2 text-center">
-                                    <div>
-                                        <p className="text-[10px] text-slate-500">PEAK DIFF</p>
-                                        <p className="text-sm font-mono text-[#F9F871]">
-                                            {Math.abs(modelStats.lstmMax - modelStats.gruMax).toFixed(0)} MW
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-500">AVG DIFF</p>
-                                        <p className="text-sm font-mono text-[#F9F871]">
-                                            {Math.abs(modelStats.lstmAvg - modelStats.gruAvg).toFixed(0)} MW
-                                        </p>
                                     </div>
                                 </div>
                             </div>

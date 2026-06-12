@@ -7,7 +7,6 @@ class ForecastRequest(BaseModel):
 
 class ForecastResponse(BaseModel):
     timestamps: List[str]
-    loads_lightgbm_lstm: List[Optional[float]]  # LightGBM + LSTM hybrid predictions (None = NA)
     loads_lightgbm_gru: List[Optional[float]]   # LightGBM + GRU hybrid predictions (None = NA)
     min_load: Optional[float]
     max_load: Optional[float]

@@ -12,6 +12,28 @@ const ControlPanel = ({ onPredict, loading }) => {
     const [startDate, setStartDate] = useState(formatDate(today));
     const [endDate, setEndDate] = useState(formatDate(tomorrow));
 
+    // Calculate maximum allowed end date (start date + 3 days)
+    const maxEndDateObj = new Date(startDate);
+    maxEndDateObj.setDate(maxEndDateObj.getDate() + 3);
+    const maxEndDate = formatDate(maxEndDateObj);
+
+    const handleStartDateChange = (e) => {
+        const newStart = e.target.value;
+        setStartDate(newStart);
+        
+        // Ensure endDate is valid given the new startDate
+        const newStartObj = new Date(newStart);
+        const currentEndObj = new Date(endDate);
+        const newMaxEndObj = new Date(newStart);
+        newMaxEndObj.setDate(newMaxEndObj.getDate() + 3);
+        
+        if (currentEndObj < newStartObj) {
+            setEndDate(newStart);
+        } else if (currentEndObj > newMaxEndObj) {
+            setEndDate(formatDate(newMaxEndObj));
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
         onPredict(startDate, endDate);
@@ -37,7 +59,7 @@ const ControlPanel = ({ onPredict, loading }) => {
                     <input
                         type="date"
                         value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        onChange={handleStartDateChange}
                         className="w-full bg-[#131b2d] border border-[#00FFF6]/50 px-4 py-3 text-[#EAEAEA] font-mono focus:border-[#00FFF6] focus:shadow-[0_0_10px_rgba(0,255,246,0.2)] outline-none transition-all placeholder-[#8A8F98]"
                     />
                 </div>
@@ -49,6 +71,8 @@ const ControlPanel = ({ onPredict, loading }) => {
                     <input
                         type="date"
                         value={endDate}
+                        min={startDate}
+                        max={maxEndDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         className="w-full bg-[#131b2d] border border-[#FF2A6D]/50 px-4 py-3 text-[#EAEAEA] font-mono focus:border-[#FF2A6D] focus:shadow-[0_0_10px_rgba(255,42,109,0.2)] outline-none transition-all"
                     />
