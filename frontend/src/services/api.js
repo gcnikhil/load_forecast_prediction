@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000';
+// Fix 24: Use VITE_API_URL env variable with fallback for deployment flexibility
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8002';
 
 export const predictLoad = async (startDate, endDate) => {
     try {
@@ -60,6 +61,25 @@ export const getHistoricalAccuracy = async () => {
         return response.data;
     } catch (error) {
         console.error("Error fetching historical accuracy:", error);
+        throw error;
+    }
+};
+
+
+/**
+ * What-If prediction — calls the new /whatif/predict endpoint.
+ * featureOverrides: plain object, e.g. { is_holiday: 1, temperature_celsius: 38 }
+ */
+export const whatIfPredict = async (startDate, endDate, featureOverrides) => {
+    try {
+        const response = await axios.post(`${API_URL}/whatif/predict`, {
+            start_date: startDate,
+            end_date: endDate,
+            feature_overrides: featureOverrides,
+        });
+        return response.data;
+    } catch (error) {
+        console.error("What-If prediction error:", error);
         throw error;
     }
 };

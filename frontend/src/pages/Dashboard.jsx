@@ -4,8 +4,7 @@ import clsx from 'clsx';
 import { predictLoad, getRealtimeStatus } from '../services/api';
 import ForecastChart from '../components/ForecastChart';
 import ControlPanel from '../components/ControlPanel';
-import StatsCard from '../components/StatsCard';
-import { Activity, Zap, TrendingUp, AlertCircle, Maximize2, Minimize2, Radio, TrendingDown, BarChart3 } from 'lucide-react';
+import { AlertCircle, Maximize2, Minimize2, Radio, Zap, BarChart3 } from 'lucide-react';
 
 const formatNullable = (value, suffix = '') => {
     if (value === null || value === undefined) {
@@ -20,17 +19,18 @@ const Dashboard = () => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [error, setError] = useState(null);
 
-    // Fetch real-time status every 10 seconds
+    // Fix 22: Pause realtime polling when the browser tab is in the background
     useEffect(() => {
         const fetchStatus = async () => {
+            if (document.visibilityState === 'hidden') return;
             try {
                 const status = await getRealtimeStatus();
                 setRealtimeStatus(status);
-            } catch (error) {
-                console.error("Failed to fetch realtime status", error);
+            } catch (err) {
+                console.error("Failed to fetch realtime status", err);
             }
         };
-        
+
         fetchStatus();
         const interval = setInterval(fetchStatus, 10000);
         return () => clearInterval(interval);
@@ -62,15 +62,16 @@ const Dashboard = () => {
         }
     };
 
-    // Calculate model stats
+    // Fix 23: Filter null/NaN before Math.max/min to prevent -Infinity/NaN on stats cards
     const getModelStats = () => {
         if (!data || !data.loads_lightgbm_gru || data.loads_lightgbm_gru.length === 0) return null;
-        const gruLoads = data.loads_lightgbm_gru;
-        
+        const gruLoads = data.loads_lightgbm_gru.filter(v => v !== null && !isNaN(v));
+        if (!gruLoads.length) return null;
+
         const gruMax = Math.max(...gruLoads);
         const gruMin = Math.min(...gruLoads);
         const gruAvg = gruLoads.reduce((a, b) => a + b, 0) / gruLoads.length;
-        
+
         return { gruMax, gruMin, gruAvg };
     };
 
@@ -194,7 +195,7 @@ const Dashboard = () => {
                             className="absolute top-4 right-4 z-20 p-2 bg-[#0B0F1A]/80 border border-[#00FFF6]/30 text-[#00FFF6] hover:bg-[#00FFF6]/10 hover:border-[#00FFF6] transition-all rounded-sm group-hover:opacity-100 opacity-0"
                             title={isFullScreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                         >
-                            {isFullScreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                            {isFullScreen ? <Maximize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                         </button>
 
                         {data && data.timestamps && data.timestamps.length > 0 ? (

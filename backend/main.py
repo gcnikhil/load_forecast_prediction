@@ -1,4 +1,6 @@
+import asyncio
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 import joblib
@@ -9,9 +11,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from data_scraper import BengaluruDataScraper
 from model import ModelService
-from schemas import ForecastRequest, ForecastResponse
+from schemas import ForecastRequest, ForecastResponse, WhatIfRequest, WhatIfResponse
 
-app = FastAPI(title="Bengaluru BESCOM Load Forecasting API - Hybrid Models")
+# Use modern lifespan pattern for startup/shutdown
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        model_service.load_models()
+    except Exception as e:
+        print(f"Error loading models: {e}")
+    yield
+
+app = FastAPI(title="Bengaluru BESCOM Load Forecasting API - Hybrid Models", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +36,13 @@ model_service = ModelService()
 realtime_cache = {"expires_at": None, "payload": None, "error": None}
 REALTIME_CACHE_TTL_SECONDS = 300
 REALTIME_ERROR_CACHE_TTL_SECONDS = 120
+
+# asyncio lock to guard shared realtime_cache in async context
+_realtime_cache_lock = asyncio.Lock()
+
+# Module-level cache for /historical-accuracy (expensive endpoint)
+_accuracy_cache: dict = {"result": None, "expires_at": None}
+ACCURACY_CACHE_TTL = 3600  # 1 hour — only changes on retrain
 
 
 def _load_latest_available_curve(scraper: BengaluruDataScraper, reference_day: datetime, lookback_days: int = 7):
@@ -48,6 +66,7 @@ def load_training_metadata():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     metadata_paths = [
         os.path.join(base_dir, "models", "metadata.joblib"),
+        os.path.join(base_dir, "models", "gru_lgb_metadata.joblib"),
         os.path.join(base_dir, "metadata.joblib"),
     ]
     for path in metadata_paths:
@@ -59,14 +78,6 @@ def load_training_metadata():
     return None
 
 
-@app.on_event("startup")
-async def startup_event():
-    try:
-        model_service.load_models()
-    except Exception as e:
-        print(f"Error loading models: {e}")
-
-
 @app.post("/predict", response_model=ForecastResponse)
 async def predict_load(request: ForecastRequest):
     try:
@@ -76,6 +87,7 @@ async def predict_load(request: ForecastRequest):
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="End date must be after start date")
 
+        # Active GRU multi-step model is trained with a 72-hour horizon (3 days)
         if (end_date - start_date).days > 3:
             raise HTTPException(status_code=400, detail="Maximum forecast range is 3 days")
 
@@ -110,6 +122,85 @@ async def predict_load(request: ForecastRequest):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@app.post("/whatif/predict", response_model=WhatIfResponse)
+async def whatif_predict(request: WhatIfRequest):
+    """
+    What-If Simulation: re-run the hybrid model with caller-supplied
+    feature overrides injected into every timestamp in the forecast window.
+    No model retraining. Returns both the baseline and modified forecasts.
+    """
+    try:
+        start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
+        end_date = datetime.strptime(request.end_date, "%Y-%m-%d")
+
+        if end_date < start_date:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
+        if (end_date - start_date).days > 3:
+            raise HTTPException(status_code=400, detail="Maximum forecast range is 3 days")
+
+        # --- Baseline forecast (identical to /predict, but ignoring actuals) ---
+        baseline_df = model_service.predict(start_date, end_date, ignore_actuals=True)
+
+        # --- Modified forecast with feature overrides ---
+        modified_df = model_service.predict(
+            start_date, end_date,
+            feature_overrides=request.feature_overrides,
+            ignore_actuals=True
+        )
+
+        import math
+
+        def _safe(x):
+            try:
+                return None if (isinstance(x, float) and math.isnan(x)) else x
+            except Exception:
+                return x
+
+        timestamps = baseline_df.index.strftime("%Y-%m-%d %H:%M").tolist()
+        b_gru  = [_safe(v) for v in baseline_df["loads_lightgbm_gru"].tolist()]
+        m_gru  = [_safe(v) for v in modified_df["loads_lightgbm_gru"].tolist()]
+
+        d_gru  = [
+            round(m - b, 2) if (m is not None and b is not None) else None
+            for m, b in zip(m_gru, b_gru)
+        ]
+
+        all_b = [v for v in b_gru if v is not None]
+        all_m = [v for v in m_gru if v is not None]
+
+        summary = {
+            "baseline": {
+                "mean": round(sum(all_b)/len(all_b), 1) if all_b else None,
+                "min":  round(min(all_b), 1) if all_b else None,
+                "max":  round(max(all_b), 1) if all_b else None,
+            },
+            "modified": {
+                "mean": round(sum(all_m)/len(all_m), 1) if all_m else None,
+                "min":  round(min(all_m), 1) if all_m else None,
+                "max":  round(max(all_m), 1) if all_m else None,
+            },
+        }
+        if all_b and all_m:
+            summary["mean_delta_mw"] = round(summary["modified"]["mean"] - summary["baseline"]["mean"], 1)
+            summary["mean_delta_pct"] = round(
+                (summary["modified"]["mean"] - summary["baseline"]["mean"])
+                / summary["baseline"]["mean"] * 100, 2
+            )
+
+        return WhatIfResponse(
+            timestamps=timestamps,
+            baseline_gru=b_gru,
+            modified_gru=m_gru,
+            delta_gru=d_gru,
+            summary=summary,
+            applied_overrides=request.feature_overrides,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "models_loaded": model_service.is_loaded()}
@@ -131,15 +222,12 @@ def get_model_metrics():
         return {
             "gru_hybrid": {
                 "name": "LightGBM + GRU",
-                "rmse_mw": round(float(gru_metrics.get("rmse", 0)), 2),
-                "mape_percent": round(float(gru_metrics.get("mape", 0)), 2),
+                "rmse_mw": round(float(gru_metrics.get("rmse", 0) or metadata.get("metrics", {}).get("gru_hybrid", {}).get("rmse", 0)), 2),
+                "mape_percent": round(float(gru_metrics.get("mape", 0) or metadata.get("metrics", {}).get("gru_hybrid", {}).get("mape", 0)), 2),
                 "training_samples": int(metadata.get("training_samples", 0)),
                 "features": int(metadata.get("feature_count", 0)),
-                "architecture": metadata.get("architecture", {}).get(
-                    "gru_hybrid",
-                    "LightGBM + GRU hybrid",
-                ),
-                "characteristics": "Regularized residual model that reacts faster to recent changes",
+                "architecture": metadata.get("architecture", "LightGBM + GRU stacking ensemble"),
+                "characteristics": "Regularized stacking ensemble model where GRU captures multi-step temporal patterns and LightGBM corrects residuals.",
             },
             "training_period": training_period,
             "data_source": (
@@ -153,23 +241,24 @@ def get_model_metrics():
 
 
 @app.get("/realtime-status")
-def get_realtime_status():
+async def get_realtime_status():
     """Get real-time status from Karnataka SLDC load-curve source only."""
     now = datetime.now()
 
-    if (
-        realtime_cache.get("payload") is not None
-        and realtime_cache["expires_at"] is not None
-        and now <= realtime_cache["expires_at"]
-    ):
-        return realtime_cache["payload"]
+    async with _realtime_cache_lock:
+        if (
+            realtime_cache.get("payload") is not None
+            and realtime_cache["expires_at"] is not None
+            and now <= realtime_cache["expires_at"]
+        ):
+            return realtime_cache["payload"]
 
-    if (
-        realtime_cache.get("error") is not None
-        and realtime_cache["expires_at"] is not None
-        and now <= realtime_cache["expires_at"]
-    ):
-        raise HTTPException(status_code=503, detail=realtime_cache["error"])
+        if (
+            realtime_cache.get("error") is not None
+            and realtime_cache["expires_at"] is not None
+            and now <= realtime_cache["expires_at"]
+        ):
+            raise HTTPException(status_code=503, detail=realtime_cache["error"])
 
     try:
         scraper = BengaluruDataScraper()
@@ -207,7 +296,6 @@ def get_realtime_status():
             "schedule_mw": int(round(schedule)) if schedule is not None else None,
             "drawal_mw": int(round(drawal)),
             "od_ud_mw": int(round(od_ud)) if od_ud is not None else None,
-            # Generation is not present in KPTCL load-curve workbook; keep null instead of synthesizing.
             "generation_mw": None,
             "today_max": {
                 "value": int(round(float(today_max_row["load_mw"]))),
@@ -231,21 +319,28 @@ def get_realtime_status():
             "is_stale": today.date() < ref_day.date(),
         }
 
-        realtime_cache["payload"] = payload
-        realtime_cache["error"] = None
-        realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_CACHE_TTL_SECONDS)
+        async with _realtime_cache_lock:
+            realtime_cache["payload"] = payload
+            realtime_cache["error"] = None
+            realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_CACHE_TTL_SECONDS)
         return payload
     except Exception as exc:
         detail = f"Real-time source unavailable: {exc}"
-        realtime_cache["payload"] = None
-        realtime_cache["error"] = detail
-        realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_ERROR_CACHE_TTL_SECONDS)
+        async with _realtime_cache_lock:
+            realtime_cache["payload"] = None
+            realtime_cache["error"] = detail
+            realtime_cache["expires_at"] = now + timedelta(seconds=REALTIME_ERROR_CACHE_TTL_SECONDS)
         raise HTTPException(status_code=503, detail=detail) from exc
 
 
 @app.get("/historical-accuracy")
-def get_historical_accuracy():
+async def get_historical_accuracy():
     """Get historical model accuracy computed from actual historical data."""
+    now = datetime.now()
+    if _accuracy_cache["result"] is not None and _accuracy_cache["expires_at"] is not None:
+        if now <= _accuracy_cache["expires_at"]:
+            return _accuracy_cache["result"]
+
     if not model_service.is_loaded() or model_service.base_data is None:
         raise HTTPException(status_code=503, detail="Model or historical data not loaded")
         
@@ -269,7 +364,7 @@ def get_historical_accuracy():
         if merged.empty:
             raise HTTPException(status_code=400, detail="Could not align predictions with actual data")
             
-        # Calculate daily metrics
+        # Calculate daily daily_accuracy
         for i in range(7):
             day = start_date + timedelta(days=i)
             next_day = day + timedelta(days=1)
@@ -291,7 +386,7 @@ def get_historical_accuracy():
         if not days:
             raise HTTPException(status_code=400, detail="No data available for the period")
 
-        return {
+        result = {
             "period": "Last 7 days of actual data",
             "daily_accuracy": days,
             "average": {
@@ -299,6 +394,10 @@ def get_historical_accuracy():
                 "gru_rmse": round(np.mean([d["gru_rmse"] for d in days]), 1),
             },
         }
+        
+        _accuracy_cache["result"] = result
+        _accuracy_cache["expires_at"] = now + timedelta(seconds=ACCURACY_CACHE_TTL)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

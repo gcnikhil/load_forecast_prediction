@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Info, BarChart2, Zap } from 'lucide-react';
+import { LayoutDashboard, Info, BarChart2, Zap, FlaskConical } from 'lucide-react';
 import clsx from 'clsx';
 
 const Navigation = () => {
@@ -9,6 +9,7 @@ const Navigation = () => {
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/analytics', label: 'Analytics', icon: BarChart2 },
         { path: '/about', label: 'About Models', icon: Info },
+        { path: '/whatif', label: 'What-If Sim', icon: FlaskConical },
     ];
 
     return (
