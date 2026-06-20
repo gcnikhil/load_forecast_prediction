@@ -121,14 +121,14 @@ def generate_realistic_load_data(
     # Ensure output directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # Save to CSV (without header, matching expected format)
-    df.to_csv(output_path, index=False, header=False)
+    # Save to CSV (with header, matching expected format)
+    df.to_csv(output_path, index=False, header=True)
     
-    print(f"✓ Generated {len(df)} data points")
-    print(f"✓ Date range: {timestamps[0].strftime('%Y-%m-%d')} to {timestamps[-1].strftime('%Y-%m-%d')}")
-    print(f"✓ Load range: {min(loads):.2f} - {max(loads):.2f} MW")
-    print(f"✓ Mean load: {np.mean(loads):.2f} MW")
-    print(f"✓ Saved to: {output_path}")
+    print(f"SUCCESS: Generated {len(df)} data points")
+    print(f"SUCCESS: Date range: {timestamps[0].strftime('%Y-%m-%d')} to {timestamps[-1].strftime('%Y-%m-%d')}")
+    print(f"SUCCESS: Load range: {min(loads):.2f} - {max(loads):.2f} MW")
+    print(f"SUCCESS: Mean load: {np.mean(loads):.2f} MW")
+    print(f"SUCCESS: Saved to: {output_path}")
     
     return df
 
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     )
 
     # Also create copies for compatibility with existing training paths
-    df.to_csv("data/monthdata1.csv", index=False, header=False)
-    df.to_csv("data/delhi.csv", index=False, header=False)
-    print("✓ Also saved to: data/monthdata1.csv")
-    print("✓ Also saved to: data/delhi.csv")
+    df.to_csv("data/monthdata1.csv", index=False, header=True)
+    df.to_csv("data/delhi.csv", index=False, header=True)
+    print("SUCCESS: Also saved to: data/monthdata1.csv")
+    print("SUCCESS: Also saved to: data/delhi.csv")

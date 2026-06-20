@@ -1,5 +1,6 @@
 {
-  "architecture": "GRU\u2192LightGBM multi-step hybrid",
+  "architecture": "GRU\u2192LightGBM residual ensemble",
+  "ensemble_mode": "residual",
   "dataset_name": "karnataka_realdata.csv",
   "frequency_minutes": 60,
   "samples_per_day": 24,
@@ -8,8 +9,8 @@
   "test_samples": 1056,
   "seq_len": 168,
   "horizon": 72,
-  "lgb_best_iteration": 350,
-  "train_date": "2026-05-14T19:15:58.329145",
+  "lgb_best_iteration": 1769,
+  "train_date": "2026-06-20T07:46:12.405062",
   "feature_cols": [
     "step_ahead",
     "gru_pred",

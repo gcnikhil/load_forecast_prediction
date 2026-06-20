@@ -32,7 +32,7 @@ const Dashboard = () => {
         };
 
         fetchStatus();
-        const interval = setInterval(fetchStatus, 10000);
+        const interval = setInterval(fetchStatus, 300000);
         return () => clearInterval(interval);
     }, [setRealtimeStatus]);
 
@@ -195,7 +195,7 @@ const Dashboard = () => {
                             className="absolute top-4 right-4 z-20 p-2 bg-[#0B0F1A]/80 border border-[#00FFF6]/30 text-[#00FFF6] hover:bg-[#00FFF6]/10 hover:border-[#00FFF6] transition-all rounded-sm group-hover:opacity-100 opacity-0"
                             title={isFullScreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                         >
-                            {isFullScreen ? <Maximize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                            {isFullScreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                         </button>
 
                         {data && data.timestamps && data.timestamps.length > 0 ? (

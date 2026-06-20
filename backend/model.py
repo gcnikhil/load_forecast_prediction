@@ -6,6 +6,7 @@ Multi-step LightGBM + GRU hybrid model for Bengaluru/BESCOM load forecasting.
 
 import os
 import warnings
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -14,7 +15,9 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings("ignore")
+# Set up logging
+logger = logging.getLogger("load_forecasting")
+# warnings.filterwarnings("ignore")
 
 WEATHER_COLUMNS = [
     "temperature_celsius",
@@ -29,7 +32,7 @@ try:
     TF_AVAILABLE = True
 except ImportError:
     TF_AVAILABLE = False
-    print("Warning: TensorFlow not available.")
+    logger.warning("Warning: TensorFlow not available.")
 
 try:
     from data_scraper import BengaluruDataScraper
@@ -82,9 +85,7 @@ class ModelService:
 
     def load_models(self):
         """Load the multi-step models and historical data."""
-        print("=" * 50)
-        print("Loading GRU+LightGBM Multi-Step Hybrid Model...")
-        print("=" * 50)
+        logger.info("Loading GRU+LightGBM Multi-Step Hybrid Model...")
 
         gru_path = os.path.join(self.model_dir, "gru_stage1_model.keras")
         lgb_path = os.path.join(self.model_dir, "lgb_stage2_model.txt")
@@ -100,7 +101,7 @@ class ModelService:
                 self.spd = self.metadata.get("samples_per_day", 24)
                 self.freq_min = self.metadata.get("frequency_minutes", 60)
                 self.ensemble_mode = self.metadata.get("ensemble_mode", "stacking")
-                print(f"  Ensemble mode: {self.ensemble_mode}")
+                logger.info(f"  Ensemble mode: {self.ensemble_mode}")
 
             if os.path.exists(lgb_path):
                 self.lgb_model = lgb.Booster(model_file=lgb_path)
@@ -111,12 +112,12 @@ class ModelService:
             self._is_loaded = (self.gru_model is not None) and (self.lgb_model is not None)
             
             if self._is_loaded:
-                print("  Successfully loaded multi-step GRU and LightGBM models.")
+                logger.info("  Successfully loaded multi-step GRU and LightGBM models.")
             else:
-                print("  Warning: One or more model artifacts are missing.")
+                logger.warning("  Warning: One or more model artifacts are missing.")
 
         except Exception as e:
-            print(f"  Error loading models: {e}")
+            logger.error(f"  Error loading models: {e}")
             self._is_loaded = False
 
         self._load_historical_data()
@@ -147,13 +148,13 @@ class ModelService:
                     margin = max(100.0, 0.05 * (upper_bound - lower_bound))
                     self.load_min_mw = max(0.0, lower_bound - margin)
                     self.load_max_mw = upper_bound + margin
-                print(f"  Loaded historical data: {len(self.base_data)} records")
-                print(f"  Forecast bounds: {self.load_min_mw:.0f} - {self.load_max_mw:.0f} MW")
+                logger.info(f"  Loaded historical data: {len(self.base_data)} records")
+                logger.info(f"  Forecast bounds: {self.load_min_mw:.0f} - {self.load_max_mw:.0f} MW")
                 return
             except Exception:
                 continue
 
-        print("Warning: No valid historical dataset was found.")
+        logger.warning("Warning: No valid historical dataset was found.")
 
     def _normalize_historical_data(self, raw: pd.DataFrame) -> pd.DataFrame:
         lower_cols = {str(col).strip().lower(): col for col in raw.columns}
@@ -264,7 +265,7 @@ class ModelService:
 
         return context
 
-    def _fetch_actuals_for_range(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def _fetch_actuals_for_range(self, start_date: datetime, end_date: datetime, ignore_actuals: bool = False) -> pd.DataFrame:
         actuals = pd.DataFrame()
         if self.base_data is not None:
             mask = (self.base_data.index >= start_date) & (self.base_data.index <= end_date)
@@ -272,7 +273,7 @@ class ModelService:
             
         max_actual = actuals.index.max() if not actuals.empty else (self.base_data.index.max() if self.base_data is not None else start_date - timedelta(days=1))
         
-        if SCRAPER_AVAILABLE and max_actual < min(end_date, datetime.now()):
+        if not ignore_actuals and SCRAPER_AVAILABLE and max_actual < min(end_date, datetime.now()):
             try:
                 from data_scraper import BengaluruDataScraper
                 scraper = BengaluruDataScraper()
@@ -284,7 +285,7 @@ class ModelService:
                     scraped_df = scraped_df.set_index("timestamp")[["load_mw"]].rename(columns={"load_mw": "load"})
                     actuals = pd.concat([actuals, scraped_df])
             except Exception as e:
-                print(f"Warning: Failed to scrape recent actuals: {e}")
+                logger.warning(f"Warning: Failed to scrape recent actuals: {e}")
                 
         if not actuals.empty:
             actuals = actuals[~actuals.index.duplicated(keep='last')].sort_index()
@@ -293,19 +294,22 @@ class ModelService:
             return actuals
         return pd.DataFrame()
 
-    def _get_past_actuals(self, end_ts: datetime, count: int) -> list:
+    def _get_past_actuals(self, end_ts: datetime, count: int, ignore_actuals: bool = False) -> list:
         start_ts = end_ts - timedelta(minutes=self.freq_min * (count - 1))
-        actuals_df = self._fetch_actuals_for_range(start_ts, end_ts)
+        actuals_df = self._fetch_actuals_for_range(start_ts, end_ts, ignore_actuals=ignore_actuals)
         
         idx = pd.date_range(start_ts, end_ts, freq=f"{self.freq_min}min")
         
         if actuals_df.empty:
-             mean_val = self.base_data["load"].mean() if self.base_data is not None else 3700.0
-             return [mean_val] * count
+             # mean_val = self.base_data["load"].mean() if self.base_data is not None else 3700.0
+             # return [mean_val] * count
+             raise ValueError("actuals_df is empty. Fallback option disabled.")
              
         aligned = actuals_df.reindex(idx).interpolate(method="time").ffill().bfill()
-        mean_val = self.base_data["load"].mean() if self.base_data is not None else 3700.0
-        aligned["load"] = aligned["load"].fillna(mean_val)
+        # mean_val = self.base_data["load"].mean() if self.base_data is not None else 3700.0
+        # aligned["load"] = aligned["load"].fillna(mean_val)
+        if aligned["load"].isnull().any():
+             raise ValueError("Aligned actuals contain NaNs. Fallback option disabled.")
         
         return aligned["load"].tolist()
 
@@ -329,9 +333,13 @@ class ModelService:
 
         rolling_windows = sorted({max(2, self.spd // 4), half, self.spd})
         for w in rolling_windows:
-            window_data = past_actuals[-w:] if len(past_actuals) >= w else past_actuals
+            # Shift by 1: exclude the last element of past_actuals (which is anchor_load at time t)
+            window_data = past_actuals[-w-1:-1] if len(past_actuals) >= w + 1 else past_actuals[:-1]
+            if len(window_data) == 0:
+                window_data = [past_actuals[0]]
             f[f"anchor_roll_mean_{w}"] = float(np.mean(window_data))
-            f[f"anchor_roll_std_{w}"] = float(np.std(window_data))
+            # Use ddof=1 for sample standard deviation to match Pandas rolling std during training
+            f[f"anchor_roll_std_{w}"] = float(np.std(window_data, ddof=1)) if len(window_data) > 1 else 0.0
             f[f"anchor_roll_min_{w}"] = float(np.min(window_data))
             f[f"anchor_roll_max_{w}"] = float(np.max(window_data))
             
@@ -366,24 +374,27 @@ class ModelService:
         return f
 
     def _fallback_dataframe(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        timestamps = []
-        current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_ts = end_date.replace(hour=23, minute=55, second=0, microsecond=0)
-        while current <= end_ts:
-            timestamps.append(current)
-            current += timedelta(minutes=5)
+        end_ts = end_date.replace(hour=23, minute=59, second=59, microsecond=0)
+        out_timestamps = []
+        curr = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        while curr <= end_ts:
+            out_timestamps.append(curr)
+            curr += timedelta(minutes=5)
             
         mean_val = self.base_data["load"].mean() if self.base_data is not None else 3700.0
-        return pd.DataFrame({"loads_lightgbm_gru": [mean_val] * len(timestamps)}, index=timestamps)
+        return pd.DataFrame({"loads_lightgbm_gru": [mean_val] * len(out_timestamps)}, index=out_timestamps)
 
-    def predict(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def predict(self, start_date: datetime, end_date: datetime,
+                ignore_actuals: bool = False,
+                feature_overrides: Optional[dict] = None) -> pd.DataFrame:
         if not self._is_loaded or self.gru_model is None or self.lgb_model is None:
-            self.last_prediction_info = {
-                "used_dummy": True,
-                "dummy_reason": "Models not loaded",
-                "dummy_model": "fallback_prediction",
-            }
-            return self._fallback_dataframe(start_date, end_date)
+            # self.last_prediction_info = {
+            #     "used_dummy": True,
+            #     "dummy_reason": "Models not loaded",
+            #     "dummy_model": "fallback_prediction",
+            # }
+            # return self._fallback_dataframe(start_date, end_date)
+            raise RuntimeError(f"Models not loaded! _is_loaded={self._is_loaded}, gru_model={self.gru_model is not None}, lgb_model={self.lgb_model is not None}")
             
         # Target timestamps exactly aligned to the model's training frequency (e.g., hourly)
         target_ts_list = []
@@ -395,12 +406,13 @@ class ModelService:
             
         # Origin time is the last step before the prediction window
         origin_time = start_date - timedelta(minutes=self.freq_min)
-        past_actuals = self._get_past_actuals(origin_time, self.seq_len)
+        past_actuals = self._get_past_actuals(origin_time, self.seq_len, ignore_actuals=ignore_actuals)
         
         # Scale and GRU predict
         past_scaled = self.load_scaler.transform(np.array(past_actuals).reshape(-1, 1)).reshape(1, self.seq_len, 1)
         gru_scaled = self.gru_model.predict(past_scaled, verbose=0)
-        gru_preds = self.load_scaler.inverse_transform(gru_scaled)[0]
+        # Fix: Reshape multi-step output to 1D before inverse scaling to prevent shape warnings/errors
+        gru_preds = self.load_scaler.inverse_transform(gru_scaled.reshape(-1, 1)).reshape(gru_scaled.shape)[0]
         
         # Build LightGBM features
         self.forecast_weather = self._fetch_forecast_weather(start_date, end_date)
@@ -413,10 +425,17 @@ class ModelService:
                 
             gru_val = gru_preds[h-1]
             rec = self._build_single_step_features(ts, h, gru_val, past_actuals)
+            
+            # Apply feature overrides if provided (for what-if scenarios)
+            if feature_overrides:
+                for k, v in feature_overrides.items():
+                    if k in rec:
+                        rec[k] = v
             records.append(rec)
             
         if not records:
-             return self._fallback_dataframe(start_date, end_date)
+             # return self._fallback_dataframe(start_date, end_date)
+             raise ValueError("No records generated for prediction. Fallback option disabled.")
              
         feat_df = pd.DataFrame(records)
         for col in self.feature_cols:

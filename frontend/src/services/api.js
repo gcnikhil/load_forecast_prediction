@@ -15,9 +15,9 @@ export const predictLoad = async (startDate, endDate) => {
         return {
             ...data,
             // Provide both new and legacy field names
-            loads_lightgbm: data.loads_lightgbm_lstm,
+            loads_lightgbm: data.loads_lightgbm_gru,
             loads_bengaluru: data.loads_lightgbm_gru,
-            loads_lightgbm_lstm: data.loads_lightgbm_lstm,
+            loads_lightgbm_lstm: data.loads_lightgbm_gru,
             loads_lightgbm_gru: data.loads_lightgbm_gru
         };
     } catch (error) {

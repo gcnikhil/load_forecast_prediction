@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -13,13 +14,17 @@ from data_scraper import BengaluruDataScraper
 from model import ModelService
 from schemas import ForecastRequest, ForecastResponse, WhatIfRequest, WhatIfResponse
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("load_forecasting")
+
 # Use modern lifespan pattern for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         model_service.load_models()
     except Exception as e:
-        print(f"Error loading models: {e}")
+        logger.error(f"Error loading models: {e}")
     yield
 
 app = FastAPI(title="Bengaluru BESCOM Load Forecasting API - Hybrid Models", lifespan=lifespan)
@@ -27,7 +32,7 @@ app = FastAPI(title="Bengaluru BESCOM Load Forecasting API - Hybrid Models", lif
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -81,8 +86,11 @@ def load_training_metadata():
 @app.post("/predict", response_model=ForecastResponse)
 async def predict_load(request: ForecastRequest):
     try:
-        start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(request.end_date, "%Y-%m-%d")
+        try:
+            start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
+            end_date = datetime.strptime(request.end_date, "%Y-%m-%d")
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=f"Invalid date format. Expected YYYY-MM-DD. Error: {ve}")
 
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="End date must be after start date")
@@ -118,6 +126,8 @@ async def predict_load(request: ForecastRequest):
             dummy_reason=str(prediction_info.get("dummy_reason", "")),
             dummy_model=str(prediction_info.get("dummy_model", "")),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -130,8 +140,11 @@ async def whatif_predict(request: WhatIfRequest):
     No model retraining. Returns both the baseline and modified forecasts.
     """
     try:
-        start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(request.end_date, "%Y-%m-%d")
+        try:
+            start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
+            end_date = datetime.strptime(request.end_date, "%Y-%m-%d")
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=f"Invalid date format. Expected YYYY-MM-DD. Error: {ve}")
 
         if end_date < start_date:
             raise HTTPException(status_code=400, detail="End date must be after start date")

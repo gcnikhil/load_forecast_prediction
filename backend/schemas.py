@@ -34,11 +34,8 @@ class WhatIfResponse(BaseModel):
     can render a side-by-side comparison chart.
     """
     timestamps: List[str]
-    baseline_lstm: Optional[List[Optional[float]]] = None
     baseline_gru: List[Optional[float]]
-    modified_lstm: Optional[List[Optional[float]]] = None
     modified_gru: List[Optional[float]]
-    delta_lstm: Optional[List[Optional[float]]] = None
     delta_gru: List[Optional[float]]
     summary: Dict[str, Any]             # mean/min/max for both scenarios
     applied_overrides: Dict[str, Any]   # echo back what was actually applied
