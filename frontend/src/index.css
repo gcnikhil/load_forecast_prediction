@@ -145,3 +145,68 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* Print Styling for PDF Reports */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    color: #0d1117 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  }
+  
+  /* Hide side navigation bar, buttons, and other interactive or non-print elements */
+  nav, aside, button, .print-hide, .cursor-pointer, .bg-scanner {
+    display: none !important;
+  }
+  
+  /* Reset margins and paddings for the printable content area */
+  main, .ml-64, #root {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Transform cyberpunk dark cards into clean high-contrast light report blocks */
+  .bg-\[\#0B0F1A\], .bg-\[\#131b2d\], .bg-gradient-to-br, .bg-gradient-to-r {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    background-image: none !important;
+  }
+  
+  /* Ensure all text colors print in high contrast dark colors */
+  h1, h2, h3, h4, p, span, div, text {
+    color: #0f172a !important;
+  }
+  
+  /* Map neon titles to solid bold black/dark grey text */
+  .text-\[\#00FFF6\], .text-\[\#FF2A6D\], .text-\[\#F9F871\], .text-green-400, .text-purple-400, .text-purple-500, .text-green-500 {
+    color: #1e293b !important;
+    font-weight: bold !important;
+  }
+  
+  /* Force print background colors and graphics (required for colored lines/bars) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Make Recharts grids light gray for printing */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #e2e8f0 !important;
+  }
+  
+  /* Adjust margins so everything prints within page limits */
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm;
+  }
+  
+  /* Prevent cards or sections from breaking awkwardly across pages */
+  h2, h3, .grid, .bg-\[\#0B0F1A\] {
+    page-break-inside: avoid !important;
+  }
+}

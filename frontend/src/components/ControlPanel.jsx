@@ -12,9 +12,9 @@ const ControlPanel = ({ onPredict, loading }) => {
     const [startDate, setStartDate] = useState(formatDate(today));
     const [endDate, setEndDate] = useState(formatDate(tomorrow));
 
-    // Calculate maximum allowed end date (start date + 3 days)
+    // Calculate maximum allowed end date (start date + 7 days)
     const maxEndDateObj = new Date(startDate);
-    maxEndDateObj.setDate(maxEndDateObj.getDate() + 3);
+    maxEndDateObj.setDate(maxEndDateObj.getDate() + 7);
     const maxEndDate = formatDate(maxEndDateObj);
 
     const handleStartDateChange = (e) => {
@@ -25,7 +25,7 @@ const ControlPanel = ({ onPredict, loading }) => {
         const newStartObj = new Date(newStart);
         const currentEndObj = new Date(endDate);
         const newMaxEndObj = new Date(newStart);
-        newMaxEndObj.setDate(newMaxEndObj.getDate() + 3);
+        newMaxEndObj.setDate(newMaxEndObj.getDate() + 7);
         
         if (currentEndObj < newStartObj) {
             setEndDate(newStart);

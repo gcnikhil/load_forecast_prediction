@@ -49,6 +49,15 @@ class TestModelService(unittest.TestCase):
         self.assertIsInstance(df, pd.DataFrame)
         self.assertIn("loads_lightgbm_gru", df.columns)
 
+    def test_predict_rolling(self):
+        start_date = datetime(2026, 6, 13)
+        end_date = datetime(2026, 6, 19)
+        df = self.service.predict_rolling(start_date, end_date, ignore_actuals=True)
+        
+        self.assertIsInstance(df, pd.DataFrame)
+        self.assertIn("loads_lightgbm_gru", df.columns)
+        self.assertGreater(len(df), 288 * 3)
+
     def test_fallback_alignment(self):
         start_date = datetime(2026, 6, 21)
         end_date = datetime(2026, 6, 23)

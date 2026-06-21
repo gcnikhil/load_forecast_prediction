@@ -107,7 +107,10 @@ class ModelService:
                 self.lgb_model = lgb.Booster(model_file=lgb_path)
 
             if TF_AVAILABLE and os.path.exists(gru_path):
-                self.gru_model = load_model(gru_path)
+                try:
+                    self.gru_model = load_model(gru_path, compile=False, safe_mode=False)
+                except TypeError:
+                    self.gru_model = load_model(gru_path, compile=False)
 
             self._is_loaded = (self.gru_model is not None) and (self.lgb_model is not None)
             
@@ -317,6 +320,11 @@ class ModelService:
         f = {
             "step_ahead": step_ahead,
             "gru_pred": gru_pred,
+            "log_step_ahead": np.log(step_ahead),
+            "step_ahead_sq": step_ahead ** 2,
+            "step_ahead_frac": step_ahead / self.horizon,
+            "load_same_hour_recent": past_actuals[self.seq_len - 24 * int(np.ceil(step_ahead / 24.0)) - 1 + step_ahead],
+            "load_same_hour_last_week": past_actuals[self.seq_len - 168 - 1 + step_ahead],
         }
         
         f["anchor_load"] = past_actuals[-1]
@@ -476,3 +484,35 @@ class ModelService:
             "dummy_model": "",
         }
         return out_df
+
+    def predict_rolling(self, start_date: datetime, end_date: datetime,
+                        ignore_actuals: bool = False) -> pd.DataFrame:
+        """
+        Generate predictions for a date range by sliding a 1-day prediction window
+        and using actual historical context for each day.
+        """
+        # If the range is <= 7 days, we can use the standard multi-step prediction directly
+        if (end_date - start_date).days <= 7:
+            return self.predict(start_date, end_date, ignore_actuals=ignore_actuals)
+            
+        current_day = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_day = end_date.replace(hour=23, minute=59, second=59, microsecond=0)
+        
+        dfs = []
+        while current_day <= end_day:
+            day_start = current_day
+            day_end = current_day
+            try:
+                day_df = self.predict(day_start, day_end, ignore_actuals=ignore_actuals)
+                dfs.append(day_df)
+            except Exception as e:
+                logger.error(f"Error predicting for day {current_day.strftime('%Y-%m-%d')}: {e}")
+                pass
+            current_day += timedelta(days=1)
+            
+        if not dfs:
+            return self.predict(start_date, end_date, ignore_actuals=ignore_actuals)
+            
+        combined_df = pd.concat(dfs)
+        combined_df = combined_df[~combined_df.index.duplicated(keep='last')].sort_index()
+        return combined_df

@@ -14,10 +14,8 @@ export const predictLoad = async (startDate, endDate) => {
         const data = response.data;
         return {
             ...data,
-            // Provide both new and legacy field names
             loads_lightgbm: data.loads_lightgbm_gru,
             loads_bengaluru: data.loads_lightgbm_gru,
-            loads_lightgbm_lstm: data.loads_lightgbm_gru,
             loads_lightgbm_gru: data.loads_lightgbm_gru
         };
     } catch (error) {
@@ -80,6 +78,26 @@ export const whatIfPredict = async (startDate, endDate, featureOverrides) => {
         return response.data;
     } catch (error) {
         console.error("What-If prediction error:", error);
+        throw error;
+    }
+};
+
+export const getFeatureImportance = async () => {
+    try {
+        const response = await axios.get(`${API_URL}/feature-importance`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching feature importance:", error);
+        throw error;
+    }
+};
+
+export const getForecastVsActual = async (days = 7) => {
+    try {
+        const response = await axios.get(`${API_URL}/forecast-vs-actual?days=${days}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching forecast vs actual data:", error);
         throw error;
     }
 };

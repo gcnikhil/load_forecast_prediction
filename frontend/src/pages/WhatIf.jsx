@@ -196,7 +196,7 @@ export default function WhatIf() {
         if (!s || !e) return 'Please select both start and end dates.';
         const diff = (new Date(e) - new Date(s)) / 86400000;
         if (diff < 0) return 'End date must be after start date.';
-        if (diff > 3) return 'Maximum forecast range is 3 days.';
+        if (diff > 7) return 'Maximum forecast range is 7 days.';
         return '';
     };
 
