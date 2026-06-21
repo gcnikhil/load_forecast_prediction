@@ -13,7 +13,7 @@ const Navigation = () => {
     ];
 
     return (
-        <div className="h-screen w-64 bg-[#0B0F1A] border-r border-[#00FFF6]/20 flex flex-col fixed left-0 top-0 z-50 transition-all duration-300">
+        <aside className="h-screen w-64 bg-[#0B0F1A] border-r border-[#00FFF6]/20 flex flex-col fixed left-0 top-0 z-50 transition-all duration-300">
             <div className="p-8 flex items-center gap-3">
                 <div className="p-2 border border-[#00FFF6]/50 bg-[#00FFF6]/10 shadow-[0_0_15px_rgba(0,255,246,0.2)]">
                     <Zap className="w-6 h-6 text-[#00FFF6]" />
@@ -61,7 +61,7 @@ const Navigation = () => {
                     Ver 1.0.0
                 </p>
             </div>
-        </div>
+        </aside>
     );
 };
 

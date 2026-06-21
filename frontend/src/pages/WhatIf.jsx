@@ -9,6 +9,7 @@ import { whatIfPredict } from '../services/api';
 const SYSTEM_PROMPT = `You are a feature-extraction assistant for an electricity load forecasting system.
 The user will describe a hypothetical scenario in plain English.
 Your job is to extract the relevant feature changes and return them as a JSON object.
+Do NOT attempt to use or call any tools or functions. Output ONLY the JSON block.
 
 Available features you can override:
 - is_holiday: 0 or 1 (1 = it's a public holiday)
@@ -21,7 +22,7 @@ Available features you can override:
 - cloud_cover_percent: float 0–100
 
 Rules:
-1. Respond with ONLY a valid JSON object.
+1. Respond with ONLY a valid JSON object. No markdown formatting, no explanations, no text before or after the JSON.
 2. Mapping qualitative terms:
    - "High humidity" -> 90, "Low humidity" -> 20
    - "Very hot" -> 42, "Chilly/Cold" -> 15
@@ -29,17 +30,18 @@ Rules:
    - "Industrial surge" -> Map to temperature_celsius: 40 (proxy for high industrial cooling load)
 3. Extract exact numbers if mentioned (e.g., "45km/h wind" -> {"wind_speed_kmh": 45}).
 4. If a feature isn't mentioned, do not include it.
-5. No explanations. Only JSON.
+5. Do NOT write any conversational text or explanation. Only output the JSON object.
 
 Example input: "Simulate a 45km/h wind storm with heavy rain and low humidity"
 Example output: {"wind_speed_kmh": 45, "precipitation_mm": 50, "humidity_percent": 20, "weather_code": 63}`;
 
 const LLM_MODELS = [
+    { value: 'meta-llama/llama-3.3-70b-instruct:free',   label: 'Llama 3.3 70B (Free) [Recommended]' },
     { value: 'openrouter/free',                          label: 'Auto-Select Best Free ★' },
-    { value: 'google/gemma-4-31b:free',                  label: 'Gemma 4 31B (Free)' },
+    { value: 'meta-llama/llama-3.2-3b-instruct:free',   label: 'Llama 3.2 3B (Free)' },
+    { value: 'google/gemma-4-31b-it:free',              label: 'Gemma 4 31B (Free)' },
     { value: 'openai/gpt-oss-120b:free',                 label: 'GPT-OSS 120B (Free)' },
     { value: 'nvidia/nemotron-3-nano-30b-a3b:free',      label: 'Nemotron 3 Nano 30B (Free)' },
-    { value: 'meta-llama/llama-3.2-3b-instruct:free',   label: 'Llama 3.2 3B (Free)' },
 ];
 
 const ANALYSIS_PROMPT = `You are an expert energy grid analyst. The user has run a what-if simulation for Bengaluru's power grid.
@@ -152,7 +154,7 @@ const formatDate = (d) => d.toISOString().slice(0, 10); // YYYY-MM-DD
 
 export default function WhatIf() {
     const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_api_key') || '');
-    const [llmModel, setLlmModel] = useState(() => sessionStorage.getItem('wi_llmModel') || 'openrouter/free');
+    const [llmModel, setLlmModel] = useState(() => sessionStorage.getItem('wi_llmModel') || 'meta-llama/llama-3.3-70b-instruct:free');
     const [startDate, setStartDate] = useState(() => {
         const d = new Date(); d.setDate(d.getDate() + 1); 
         return sessionStorage.getItem('wi_startDate') || formatDate(d);
@@ -231,11 +233,17 @@ export default function WhatIf() {
                 throw new Error(err.error?.message || `OpenRouter error ${res.status}`);
             }
             const data = await res.json();
-            const rawContent = data.choices[0].message.content.trim();
+            const rawContent = (data.choices[0].message?.content || '').trim();
             let overrides = {};
             try {
-                const cleaned = rawContent.replace(/```json|```/g, '').trim();
-                overrides = JSON.parse(cleaned);
+                const startIdx = rawContent.indexOf('{');
+                const endIdx = rawContent.lastIndexOf('}');
+                if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                    const jsonStr = rawContent.slice(startIdx, endIdx + 1);
+                    overrides = JSON.parse(jsonStr);
+                } else {
+                    throw new Error("No JSON object found in response");
+                }
                 // Coerce numeric strings to numbers
                 Object.keys(overrides).forEach(k => {
                     const n = Number(overrides[k]);
@@ -299,7 +307,7 @@ export default function WhatIf() {
                 }),
             });
             const data = await res.json();
-            setSimInsight(data.choices[0].message.content.trim());
+            setSimInsight((data.choices[0].message?.content || '').trim());
         } catch (err) {
             setSimInsight('Could not generate insight due to API error.');
         }

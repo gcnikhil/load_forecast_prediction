@@ -1,16 +1,46 @@
-# React + Vite
+# Energy Forecasting & Telemetry Dashboard (Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the React frontend for the Karnataka Load Forecast Prediction System. It provides an interactive dashboard, historical load analytics, model accuracy reports, and a What-If simulation engine.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+* **Live Status Dashboard**: Visualizes current frequency, BESCOM load, Karnataka state demand, deviation, regional ESCOM draws, and live generation breakdown (Solar, Wind, Thermal, Hydro).
+* **Deep Analytics**: Comprehensive forecast graphs showing predicted loads, Load Duration Curves (LDC), load frequency distribution, and historical model errors (MAPE/RMSE).
+* **PDF Report Exports**: Seamless, formatted print styles for generating clean, portrait-aligned, black-and-white printouts/PDFs directly from the browser.
+* **What-If Simulation Engine**: Test grid stability under monsoon surges, heatwaves, or industrial demand fluctuations with simulated weather parameters using LLMs.
 
-## React Compiler
+## Core Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* **framework**: React + Vite
+* **styling**: Vanilla CSS + TailwindCSS (using cyber/neon themes)
+* **icons**: Lucide-React
+* **charts**: Recharts (Responsive SVG plots)
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Getting Started
+
+### 1. Install Dependencies
+
+Navigate to the frontend folder and install the Node packages:
+
+```bash
+npm install
+```
+
+### 2. Run the Development Server
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+* The application will run locally at [http://localhost:5173/](http://localhost:5173/).
+
+### 3. OpenRouter API Key Setup
+
+To use the **What-If Sim** page:
+1. Obtain an API Key from [OpenRouter](https://openrouter.ai/).
+2. Paste the API key into the **OpenRouter API Key** input box at the top of the What-If simulation page.
+3. Select a model (defaults to the stable and fast `Llama 3.3 70B (Free)`) and trigger simulation scenarios.

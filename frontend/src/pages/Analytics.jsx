@@ -429,7 +429,7 @@ const Analytics = () => {
                         <ResponsiveContainer>
                             <LineChart data={overlayChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                <XAxis dataKey="timestamp" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} />
+                                <XAxis dataKey="timestamp" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${(v/1000).toFixed(1)}k`} domain={['dataMin - 100', 'dataMax + 100']} />
                                 <Tooltip content={<CustomOverlayTooltip />} />
                                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -462,7 +462,7 @@ const Analytics = () => {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                <XAxis dataKey="hour" stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} />
+                                <XAxis dataKey="hour" stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${(v/1000).toFixed(1)}k`} domain={['dataMin - 200', 'dataMax + 200']} />
                                 <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #FF2A6D', borderRadius: 4, fontSize: 11 }} />
                                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -498,7 +498,7 @@ const Analytics = () => {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                <XAxis dataKey="percentage" stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${v}%`} />
+                                <XAxis dataKey="percentage" stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${v}%`} minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${(v/1000).toFixed(1)}k`} domain={['dataMin - 200', 'dataMax + 200']} />
                                 <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #00FFF6', borderRadius: 4, fontSize: 11 }} formatter={v => [`${v.toLocaleString()} MW`, 'Load']} labelFormatter={l => `% Time Exceeded: ${l}%`} />
                                 <Area type="monotone" dataKey="load" stroke="#00FFF6" fill="url(#gLdc)" strokeWidth={2} name="Load Exceeded (MW)" />
@@ -517,7 +517,7 @@ const Analytics = () => {
                         <ResponsiveContainer>
                             <BarChart data={distributionData} margin={{ top: 10, right: 10, left: -10, bottom: 30 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                <XAxis dataKey="range" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} angle={-45} textAnchor="end" />
+                                <XAxis dataKey="range" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} angle={-45} textAnchor="end" minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} />
                                 <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #F9F871', borderRadius: 4, fontSize: 11 }} />
                                 <Bar dataKey="count" fill="#F9F871" radius={[4, 4, 0, 0]} name="Frequency" />
@@ -535,7 +535,7 @@ const Analytics = () => {
                             <ResponsiveContainer>
                                 <LineChart data={accuracyChartData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                                    <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} />
+                                    <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} minTickGap={50} />
                                     <YAxis yAxisId="left" stroke="#a855f7" tick={{ fontSize: 10, fill: '#a855f7' }} tickFormatter={v => `${v}%`} label={{ value: 'MAPE', angle: -90, position: 'insideLeft', fill: '#a855f7', fontSize: 10 }} />
                                     <YAxis yAxisId="right" orientation="right" stroke="#FF2A6D" tick={{ fontSize: 10, fill: '#FF2A6D' }} tickFormatter={v => `${v}`} label={{ value: 'RMSE (MW)', angle: 90, position: 'insideRight', fill: '#FF2A6D', fontSize: 10 }} />
                                     <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #a855f7', borderRadius: 4, fontSize: 11 }} />

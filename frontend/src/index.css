@@ -148,10 +148,15 @@ body {
 
 /* Print Styling for PDF Reports */
 @media print {
-  body, html {
+  /* Reset backgrounds of all structure elements to clean white */
+  html, body, #root, #root > div, main, main > div {
     background: #ffffff !important;
-    color: #0d1117 !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
   
   /* Hide side navigation bar, buttons, and other interactive or non-print elements */
@@ -159,29 +164,65 @@ body {
     display: none !important;
   }
   
-  /* Reset margins and paddings for the printable content area */
-  main, .ml-64, #root {
-    margin-left: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-  
   /* Transform cyberpunk dark cards into clean high-contrast light report blocks */
-  .bg-\[\#0B0F1A\], .bg-\[\#131b2d\], .bg-gradient-to-br, .bg-gradient-to-r {
-    background: #f8fafc !important;
+  .bg-\[\#0B0F1A\], 
+  .bg-\[\#131b2d\], 
+  .bg-\[\#0B0F1A\]\/50, 
+  .bg-gradient-to-br, 
+  .bg-gradient-to-r,
+  .bg-slate-950 {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
     border: 1px solid #cbd5e1 !important;
     color: #0f172a !important;
     box-shadow: none !important;
-    background-image: none !important;
+  }
+  
+  /* Ensure all borders inside cards or separators are standard light gray */
+  [class*="border"] {
+    border-color: #cbd5e1 !important;
   }
   
   /* Ensure all text colors print in high contrast dark colors */
-  h1, h2, h3, h4, p, span, div, text {
+  h1, h2, h3, h4, p, span, div, li {
     color: #0f172a !important;
   }
   
-  /* Map neon titles to solid bold black/dark grey text */
+  /* SVG chart labels and annotations fill */
+  text {
+    fill: #334155 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  }
+  
+  /* Recharts legend colors override */
+  .recharts-legend-item-text, .recharts-default-legend, .recharts-legend-item {
+    color: #0f172a !important;
+  }
+  
+  /* High contrast print colors mapping for SVG charts */
+  path[stroke="#00FFF6"] { stroke: #0284c7 !important; } /* Neon Cyan -> Sky Blue */
+  path[stroke="#FF2A6D"] { stroke: #be123c !important; } /* Neon Pink -> Crimson */
+  path[stroke="#F9F871"] { stroke: #b45309 !important; } /* Neon Yellow -> Dark Gold */
+  path[stroke="#a855f7"] { stroke: #6d28d9 !important; } /* Neon Purple -> Deep Purple */
+
+  path[fill="#00FFF6"] { fill: #0284c7 !important; }
+  path[fill="#FF2A6D"] { fill: #be123c !important; }
+  path[fill="#F9F871"] { fill: #b45309 !important; }
+  path[fill="#a855f7"] { fill: #6d28d9 !important; }
+
+  rect[fill="#00FFF6"] { fill: #0284c7 !important; }
+  rect[fill="#FF2A6D"] { fill: #be123c !important; }
+  rect[fill="#F9F871"] { fill: #b45309 !important; }
+  rect[fill="#a855f7"] { fill: #6d28d9 !important; }
+
+  /* Map colors in SVG area charts fill gradients */
+  stop[stop-color="#00FFF6"] { stop-color: #0284c7 !important; }
+  stop[stop-color="#FF2A6D"] { stop-color: #be123c !important; }
+  stop[stop-color="#F9F871"] { stop-color: #b45309 !important; }
+  stop[stop-color="#a855f7"] { stop-color: #6d28d9 !important; }
+  
+  /* Map neon text labels to solid bold dark slate text */
   .text-\[\#00FFF6\], .text-\[\#FF2A6D\], .text-\[\#F9F871\], .text-green-400, .text-purple-400, .text-purple-500, .text-green-500 {
     color: #1e293b !important;
     font-weight: bold !important;
@@ -199,7 +240,44 @@ body {
     stroke: #e2e8f0 !important;
   }
   
-  /* Adjust margins so everything prints within page limits */
+  /* Override layout grid styling to ensure they print beautifully on portrait page */
+  .grid.grid-cols-2.md\:grid-cols-4.lg\:grid-cols-8 {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  
+  .grid.grid-cols-1.lg\:grid-cols-2 {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    gap: 20px !important;
+  }
+  
+  .grid.grid-cols-1.lg\:grid-cols-3 {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+    gap: 20px !important;
+  }
+  
+  .lg\:col-span-2 {
+    grid-column: span 1 / span 1 !important;
+  }
+  
+  /* Force chart containers to expand to full width in print and avoid clipping */
+  main div[style*="width: 100%"], 
+  main div[style*="height"] {
+    width: 100% !important;
+    display: block !important;
+    page-break-inside: avoid !important;
+  }
+  
+  .recharts-responsive-container {
+    width: 100% !important;
+    height: 280px !important;
+  }
+  
+  .recharts-wrapper, .recharts-surface {
+    width: 100% !important;
+  }
+  
+  /* Adjust page dimensions and margins */
   @page {
     size: A4 portrait;
     margin: 1.5cm;

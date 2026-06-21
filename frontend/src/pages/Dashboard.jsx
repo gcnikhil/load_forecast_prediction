@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { predictLoad, getRealtimeStatus } from '../services/api';
 import ForecastChart from '../components/ForecastChart';
 import ControlPanel from '../components/ControlPanel';
-import { AlertCircle, Maximize2, Minimize2, Radio, Zap, BarChart3 } from 'lucide-react';
+import { AlertCircle, Maximize2, Minimize2, Radio, Zap, BarChart3, Sun, Wind, Activity, Flame, Droplets, TrendingUp } from 'lucide-react';
 
 const formatNullable = (value, suffix = '') => {
     if (value === null || value === undefined) {
@@ -86,44 +86,115 @@ const Dashboard = () => {
 
             {/* Real-time Grid Status Bar */}
             {realtimeStatus && (
-                <div className="bg-[#0B0F1A] border border-[#00FFF6]/30 p-3 md:p-4 animate-in fade-in duration-500">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Radio className="w-4 h-4 text-green-400 animate-pulse" />
-                        <span className="text-xs font-mono text-[#00FFF6] uppercase tracking-wider">LIVE_GRID_STATUS</span>
-                        <span className="text-xs text-slate-500 ml-auto">{realtimeStatus.timestamp}</span>
+                <div className="bg-[#0B0F1A] border border-[#00FFF6]/20 p-4 md:p-5 animate-in fade-in duration-500 space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#00FFF6]/10 pb-3 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                            <Radio className="w-4 h-4 text-[#00FFF6] animate-pulse" />
+                            <span className="text-xs font-mono text-[#00FFF6] uppercase tracking-widest font-bold">
+                                {realtimeStatus.source === 'kptcl_sldc_live' ? 'LIVE TELEMETRY // KARNATAKA GRID' : 'LIVE_GRID_STATUS'}
+                            </span>
+                            <span className="px-2 py-0.5 border border-green-500/30 bg-green-500/10 text-[9px] font-mono text-green-400 uppercase rounded-sm">
+                                {realtimeStatus.source === 'kptcl_sldc_live' ? 'REAL-TIME' : 'STALE / FALLBACK'}
+                            </span>
+                        </div>
+                        <span className="text-xs font-mono text-[#8A8F98]">AS_OF: {realtimeStatus.timestamp}</span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-3 text-center">
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Frequency</p>
-                            <p className="text-sm md:text-lg font-mono text-[#00FFF6]">{formatNullable(realtimeStatus.frequency_hz, ' Hz')}</p>
+
+                    {/* Primary Grid Metrics */}
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-3">
+                        <div className="bg-[#0f1626] p-3 border border-[#1e293b] flex flex-col justify-between">
+                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Bengaluru Load (BESCOM)</span>
+                            <span className="text-xl md:text-2xl font-mono font-bold text-[#00FFF6] mt-2">
+                                {formatNullable(realtimeStatus.bescom_mw || realtimeStatus.current_load_mw, ' MW')}
+                            </span>
                         </div>
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Current Load</p>
-                            <p className="text-sm md:text-lg font-mono text-white">{formatNullable(realtimeStatus.current_load_mw, ' MW')}</p>
+                        <div className="bg-[#0f1626] p-3 border border-[#1e293b] flex flex-col justify-between">
+                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Karnataka Demand</span>
+                            <span className="text-xl md:text-2xl font-mono font-bold text-white mt-2">
+                                {formatNullable(realtimeStatus.state_demand_mw || realtimeStatus.current_load_mw, ' MW')}
+                            </span>
                         </div>
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Schedule</p>
-                            <p className="text-sm md:text-lg font-mono text-slate-300">{formatNullable(realtimeStatus.schedule_mw, ' MW')}</p>
+                        <div className="bg-[#0f1626] p-3 border border-[#1e293b] flex flex-col justify-between">
+                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Grid Frequency</span>
+                            <span className="text-xl md:text-2xl font-mono font-bold text-[#F9F871] mt-2">
+                                {formatNullable(realtimeStatus.frequency_hz, ' Hz')}
+                            </span>
                         </div>
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Drawal</p>
-                            <p className="text-sm md:text-lg font-mono text-slate-300">{formatNullable(realtimeStatus.drawal_mw, ' MW')}</p>
-                        </div>
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">OD/UD</p>
-                            <p className={`text-sm md:text-lg font-mono ${realtimeStatus.od_ud_mw === null || realtimeStatus.od_ud_mw === undefined ? 'text-slate-500' : realtimeStatus.od_ud_mw >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {formatNullable(realtimeStatus.od_ud_mw, ' MW')}
-                            </p>
-                        </div>
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Today Max</p>
-                            <p className="text-sm md:text-lg font-mono text-[#FF2A6D]">{formatNullable(realtimeStatus.today_max?.value, ' MW')}</p>
-                        </div>
-                        <div className="bg-[#131b2d] p-2 md:p-3 border border-[#1e293b]">
-                            <p className="text-[9px] md:text-[10px] text-slate-500 uppercase">Today Min</p>
-                            <p className="text-sm md:text-lg font-mono text-[#00FFF6]">{formatNullable(realtimeStatus.today_min?.value, ' MW')}</p>
+                        <div className="bg-[#0f1626] p-3 border border-[#1e293b] flex flex-col justify-between">
+                            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">State UI / Deviation</span>
+                            <span className={`text-xl md:text-2xl font-mono font-bold mt-2 ${
+                                realtimeStatus.od_ud_mw === null || realtimeStatus.od_ud_mw === undefined 
+                                    ? 'text-slate-500' 
+                                    : realtimeStatus.od_ud_mw >= 0 
+                                    ? 'text-green-400' 
+                                    : 'text-red-400'
+                            }`}>
+                                {realtimeStatus.od_ud_mw !== null ? `${realtimeStatus.od_ud_mw >= 0 ? '+' : ''}${realtimeStatus.od_ud_mw} MW` : 'N/A'}
+                            </span>
                         </div>
                     </div>
+
+                    {/* Secondary Metrics / Breakdown Panels */}
+                    {realtimeStatus.source === 'kptcl_sldc_live' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-[#00FFF6]/10 pt-4">
+                            {/* Generation Breakdown */}
+                            {realtimeStatus.generation_breakdown && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-1.5 text-xs font-mono text-[#8A8F98] uppercase tracking-wider">
+                                        <Activity className="w-3.5 h-3.5 text-[#F9F871]" />
+                                        <span>Live Generation Breakdown ({realtimeStatus.generation_mw ?? '—'} MW)</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {(() => {
+                                            const gb = realtimeStatus.generation_breakdown;
+                                            const total = (gb.solar_mw + gb.wind_mw + gb.thermal_mw + gb.thermal_ipp_mw + gb.hydro_mw + gb.other_mw) || 1;
+                                            const items = [
+                                                { label: 'Solar', val: gb.solar_mw, icon: <Sun className="w-3 h-3 text-[#F9F871]" />, color: 'bg-[#F9F871]/20 border-[#F9F871]/40 text-[#F9F871]' },
+                                                { label: 'Wind', val: gb.wind_mw, icon: <Wind className="w-3 h-3 text-emerald-400" />, color: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' },
+                                                { label: 'Thermal', val: gb.thermal_mw + gb.thermal_ipp_mw, icon: <Flame className="w-3 h-3 text-orange-400" />, color: 'bg-orange-500/10 border-orange-500/30 text-orange-400' },
+                                                { label: 'Hydro', val: gb.hydro_mw, icon: <Droplets className="w-3 h-3 text-blue-400" />, color: 'bg-blue-500/10 border-blue-500/30 text-blue-400' },
+                                                { label: 'Other', val: gb.other_mw, icon: <Zap className="w-3 h-3 text-purple-400" />, color: 'bg-purple-500/10 border-purple-500/30 text-purple-400' },
+                                            ];
+                                            return items.map(item => (
+                                                <div key={item.label} className={`p-2 border rounded-sm flex items-center justify-between ${item.color.split(' ')[0]} ${item.color.split(' ')[1]}`}>
+                                                    <div className="flex items-center gap-1">
+                                                        {item.icon}
+                                                        <span className="text-[10px] font-mono font-bold uppercase">{item.label}</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[11px] font-mono font-bold">{item.val} MW</p>
+                                                        <p className="text-[8px] font-mono opacity-60">{Math.round((item.val / total) * 100)}%</p>
+                                                    </div>
+                                                </div>
+                                            ));
+                                        })()}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ESCOM wise Drawal Breakdown */}
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-1.5 text-xs font-mono text-[#8A8F98] uppercase tracking-wider">
+                                    <TrendingUp className="w-3.5 h-3.5 text-[#00FFF6]" />
+                                    <span>ESCOM Drawal Distribution</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                    {[
+                                        { label: 'BESCOM (Blr)', val: realtimeStatus.bescom_mw },
+                                        { label: 'HESCOM (Hbl)', val: realtimeStatus.hescom_mw },
+                                        { label: 'GESCOM (Glb)', val: realtimeStatus.gescom_mw },
+                                        { label: 'CESC (Mys)', val: realtimeStatus.cesc_mw },
+                                        { label: 'MESCOM (Mng)', val: realtimeStatus.mescom_mw },
+                                    ].map(escom => (
+                                        <div key={escom.label} className="p-2 border border-[#1e293b] bg-[#0f1626] rounded-sm text-center">
+                                            <p className="text-[9px] font-mono text-slate-500 uppercase font-bold whitespace-nowrap">{escom.label}</p>
+                                            <p className="text-xs font-mono font-bold text-white mt-1">{escom.val !== null ? `${escom.val} MW` : 'N/A'}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
