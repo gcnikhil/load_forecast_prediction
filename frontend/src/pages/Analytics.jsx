@@ -33,7 +33,7 @@ const Analytics = () => {
                         console.error('Feature importance fetch failed:', err);
                         return null;
                     }),
-                    getForecastVsActual(7).catch(err => {
+                    getForecastVsActual(3).catch(err => {
                         console.error('Forecast vs Actual fetch failed:', err);
                         return null;
                     })
@@ -65,7 +65,7 @@ const Analytics = () => {
                 // If sharedData and sharedMetrics are already there, fetch accuracy if not fetched
                 const fetchAccOnly = async () => {
                     try {
-                        const acc = await getHistoricalAccuracy();
+                        const acc = await getHistoricalAccuracy(3);
                         setAccuracy(acc);
                     } catch (e) {
                         console.error('Historical accuracy fetch failed:', e);
@@ -80,7 +80,7 @@ const Analytics = () => {
             try {
                 const [metricsData, accuracyData] = await Promise.all([
                     getModelMetrics(),
-                    getHistoricalAccuracy().catch(err => {
+                    getHistoricalAccuracy(3).catch(err => {
                         console.error('Accuracy fetch failed:', err);
                         return null;
                     })
@@ -102,7 +102,7 @@ const Analytics = () => {
                 const [result, metricsData, accuracyData] = await Promise.all([
                     predictLoad(formatDate(yesterday), formatDate(today)),
                     getModelMetrics(),
-                    getHistoricalAccuracy().catch(err => {
+                    getHistoricalAccuracy(3).catch(err => {
                         console.error('Accuracy fetch failed:', err);
                         return null;
                     })
@@ -305,7 +305,7 @@ const Analytics = () => {
 
     let overlayChartData = [];
     if (forecastVsActual) {
-        const step = Math.max(1, Math.floor(forecastVsActual.timestamps.length / 168));
+        const step = Math.max(1, Math.floor(forecastVsActual.timestamps.length / 72));
         overlayChartData = forecastVsActual.timestamps
             .map((ts, idx) => ({
                 timestamp: ts.substring(5),
@@ -418,7 +418,7 @@ const Analytics = () => {
             {/* Forecast vs Actual Overlay Chart */}
             <div className="bg-[#0B0F1A] border border-[#00FFF6]/30 p-4 rounded-lg">
                 <h3 className="text-sm font-bold text-[#00FFF6] mb-3 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-[#00FFF6]" /> FORECAST VS ACTUAL OVERLAY (LAST 7 DAYS)
+                    <Activity className="w-4 h-4 text-[#00FFF6]" /> FORECAST VS ACTUAL OVERLAY (LAST 3 DAYS)
                 </h3>
                 <div style={{ width: '100%', height: 320 }}>
                     {loadingExtra ? (
@@ -464,7 +464,11 @@ const Analytics = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                 <XAxis dataKey="hour" stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${(v/1000).toFixed(1)}k`} domain={['dataMin - 200', 'dataMax + 200']} />
-                                <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #FF2A6D', borderRadius: 4, fontSize: 11 }} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #FF2A6D', borderRadius: 4, fontSize: 11 }}
+                                    itemStyle={{ color: '#fff' }}
+                                    labelStyle={{ color: '#8a8f98' }}
+                                />
                                 <Legend wrapperStyle={{ fontSize: 11 }} />
                                 <Area type="monotone" dataKey="GRU" stroke="#FF2A6D" fill="url(#gG)" strokeWidth={2} name="Average Hourly Forecast (MW)"
                                     label={(props) => {
@@ -500,7 +504,13 @@ const Analytics = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                 <XAxis dataKey="percentage" stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${v}%`} minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={v => `${(v/1000).toFixed(1)}k`} domain={['dataMin - 200', 'dataMax + 200']} />
-                                <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #00FFF6', borderRadius: 4, fontSize: 11 }} formatter={v => [`${v.toLocaleString()} MW`, 'Load']} labelFormatter={l => `% Time Exceeded: ${l}%`} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #00FFF6', borderRadius: 4, fontSize: 11 }}
+                                    itemStyle={{ color: '#fff' }}
+                                    labelStyle={{ color: '#8a8f98' }}
+                                    formatter={v => [`${v.toLocaleString()} MW`, 'Load']} 
+                                    labelFormatter={l => `% Time Exceeded: ${l}%`} 
+                                />
                                 <Area type="monotone" dataKey="load" stroke="#00FFF6" fill="url(#gLdc)" strokeWidth={2} name="Load Exceeded (MW)" />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -519,7 +529,11 @@ const Analytics = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                 <XAxis dataKey="range" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} angle={-45} textAnchor="end" minTickGap={50} />
                                 <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #F9F871', borderRadius: 4, fontSize: 11 }} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #F9F871', borderRadius: 4, fontSize: 11 }}
+                                    itemStyle={{ color: '#fff' }}
+                                    labelStyle={{ color: '#8a8f98' }}
+                                />
                                 <Bar dataKey="count" fill="#F9F871" radius={[4, 4, 0, 0]} name="Frequency" />
                             </BarChart>
                         </ResponsiveContainer>
@@ -538,7 +552,11 @@ const Analytics = () => {
                                     <XAxis dataKey="date" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} minTickGap={50} />
                                     <YAxis yAxisId="left" stroke="#a855f7" tick={{ fontSize: 10, fill: '#a855f7' }} tickFormatter={v => `${v}%`} label={{ value: 'MAPE', angle: -90, position: 'insideLeft', fill: '#a855f7', fontSize: 10 }} />
                                     <YAxis yAxisId="right" orientation="right" stroke="#FF2A6D" tick={{ fontSize: 10, fill: '#FF2A6D' }} tickFormatter={v => `${v}`} label={{ value: 'RMSE (MW)', angle: 90, position: 'insideRight', fill: '#FF2A6D', fontSize: 10 }} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #a855f7', borderRadius: 4, fontSize: 11 }} />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #a855f7', borderRadius: 4, fontSize: 11 }}
+                                        itemStyle={{ color: '#fff' }}
+                                        labelStyle={{ color: '#8a8f98' }}
+                                    />
                                     <Line yAxisId="left" type="monotone" dataKey="MAPE" stroke="#a855f7" strokeWidth={2} activeDot={{ r: 4 }} name="MAPE (%)" />
                                     <Line yAxisId="right" type="monotone" dataKey="RMSE" stroke="#FF2A6D" strokeWidth={2} activeDot={{ r: 4 }} name="RMSE (MW)" />
                                 </LineChart>
@@ -563,7 +581,11 @@ const Analytics = () => {
                                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={5} dataKey="value">
                                     {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                 </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #00FFF6', borderRadius: 4, fontSize: 11 }} formatter={(v) => [`${v.toLocaleString()} MW`, 'Avg Load']} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #00FFF6', borderRadius: 4, fontSize: 11 }} 
+                                    itemStyle={{ color: '#fff' }}
+                                    formatter={(v) => [`${v.toLocaleString()} MW`, 'Avg Load']} 
+                                />
                                 <Legend wrapperStyle={{ fontSize: 10 }} />
                             </PieChart>
                         </ResponsiveContainer>
@@ -592,7 +614,12 @@ const Analytics = () => {
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                     <XAxis type="number" stroke="#64748b" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}%`} />
                                     <YAxis dataKey="feature" type="category" stroke="#64748b" tick={{ fontSize: 8, fill: '#64748b' }} width={120} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #a855f7', borderRadius: 4, fontSize: 10 }} formatter={v => [`${v.toFixed(2)}%`, 'Relative Gain']} />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#0B0F1A', border: '1px solid #a855f7', borderRadius: 4, fontSize: 10 }}
+                                        itemStyle={{ color: '#fff' }}
+                                        labelStyle={{ color: '#8a8f98' }}
+                                        formatter={v => [`${v.toFixed(2)}%`, 'Relative Gain']} 
+                                    />
                                     <Bar dataKey="importance" fill="#a855f7" radius={[0, 4, 4, 0]}>
                                         {featureImportance.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#a855f7' : '#FF2A6D'} />

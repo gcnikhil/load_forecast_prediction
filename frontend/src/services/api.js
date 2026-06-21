@@ -53,9 +53,9 @@ export const getRealtimeStatus = async () => {
     }
 };
 
-export const getHistoricalAccuracy = async () => {
+export const getHistoricalAccuracy = async (days = 3) => {
     try {
-        const response = await axios.get(`${API_URL}/historical-accuracy`);
+        const response = await axios.get(`${API_URL}/historical-accuracy?days=${days}`);
         return response.data;
     } catch (error) {
         console.error("Error fetching historical accuracy:", error);

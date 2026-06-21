@@ -19,7 +19,7 @@ const Dashboard = () => {
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [error, setError] = useState(null);
 
-    // Fix 22: Pause realtime polling when the browser tab is in the background
+    // Fix 22: Poll realtime status every 60s and fetch immediately when the page becomes visible
     useEffect(() => {
         const fetchStatus = async () => {
             if (document.visibilityState === 'hidden') return;
@@ -32,8 +32,20 @@ const Dashboard = () => {
         };
 
         fetchStatus();
-        const interval = setInterval(fetchStatus, 300000);
-        return () => clearInterval(interval);
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchStatus();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        const interval = setInterval(fetchStatus, 60000);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [setRealtimeStatus]);
 
     const handlePredict = async (startDate, endDate) => {
@@ -224,10 +236,10 @@ const Dashboard = () => {
 
                     {modelStats && (
                         <div className="space-y-3">
-                            {/* GRU Model Stats */}
+                            {/* Hybrid Model Stats */}
                             <div className="bg-[#0B0F1A] border border-[#FF2A6D]/30 p-4">
                                 <h4 className="text-xs font-mono text-[#FF2A6D] uppercase mb-3 flex items-center gap-2">
-                                    <BarChart3 className="w-4 h-4" /> GRU_HYBRID FORECAST
+                                    <BarChart3 className="w-4 h-4" /> HYBRID_STACKING FORECAST
                                 </h4>
                                 <div className="grid grid-cols-3 gap-2 text-center">
                                     <div>

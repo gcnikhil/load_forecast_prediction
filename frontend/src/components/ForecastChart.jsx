@@ -80,7 +80,7 @@ const ForecastChart = ({ data }) => {
     return (
         <div className="w-full h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-300">GRU Load Forecast Profile</h3>
+                <h3 className="text-lg font-semibold text-slate-300">Hybrid Stacking Forecast Profile</h3>
                 <div className="flex gap-4 text-xs font-mono">
                     <span className="text-slate-500">Peak: <span className="text-[#FF2A6D]">{peakLoad.toLocaleString()} MW</span></span>
                     <span className="text-slate-500">Min: <span className="text-[#00FFF6]">{minLoad.toLocaleString()} MW</span></span>
@@ -151,7 +151,7 @@ const ForecastChart = ({ data }) => {
                         <Area
                             type="monotone"
                             dataKey="gru_hybrid"
-                            name="GRU Hybrid Forecast"
+                            name="LightGBM + GRU Stacking"
                             stroke="#FF2A6D"
                             fillOpacity={1}
                             fill="url(#colorGRU)"
